@@ -1,2 +1,14 @@
 .zig-cache/
 zig-out/
+elixir-zigler/_build/
+elixir-zigler/deps/
+elixir-zigler/test/
+elixir-zigler/priv/
+ex_mandelbrot/_build/
+ex_mandelbrot/deps/
+ex_mandelbrot/test/
+react-color-testing/node_modules/
+zigimg
+
+
+

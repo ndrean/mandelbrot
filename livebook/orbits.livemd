@@ -1,0 +1,198 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Mandelbrot orbits
+
+```elixir
+Mix.install(
+  [
+    {:nx, "~> 0.9.1"},
+    {:exla, "~> 0.9.1"},
+    {:kino_vega_lite, "~> 0.1.11"}
+  ],
+  config: [nx: [default_backend: EXLA.Backend]]
+)
+```
+
+## Colour function
+
+```elixir
+defmodule Color do
+  def calc(n) do
+     if (n < 0.5) do
+      scaled = n * 2
+      r = Float.round(255 * (1 - scaled))
+      g = Float.round(255 * (1 - scaled / 2))
+      b = Float.round(128 * scaled)
+      { r, g, b };
+    else 
+      scaled = (n - 0.5) * 2;
+      g = Float.round(127 * (1 - scaled))
+      b = Float.round(128 * (1 + scaled/2))
+      { 0, g, b }
+     end
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Color, <<70, 79, 82, 49, 0, 0, 9, ...>>, {:calc, 1}}
+```
+
+## Nx computations
+
+```elixir
+defmodule Mand do
+  import Nx.Defn
+  
+  def cx(x,y) do
+    Nx.concatenate(
+      [Nx.stack([Nx.tensor(x, type: :f64) , Nx.tensor(-y, type: :f64)]),
+      Nx.stack([Nx.tensor(y, type: :f64) , Nx.tensor(x, type: :f64)])
+      ]
+    )|> Nx.reshape({2,2})
+  end
+
+  defn p(z,c) do
+    Nx.dot(z,z) |> Nx.add(-c)
+  end
+
+  def iterate(1,c) do
+    c
+  end
+
+  def iterate(n,c) do
+    p(iterate(n-1,c),c)
+  end
+
+  def orb(1,c), do: c
+  
+  def orb(n,c) do
+    Enum.reduce_while(1..n, [], fn i, acc -> 
+      case acc do    
+      [] ->
+        {:cont, [c]}
+      [t |_ ] = acc ->
+        if Nx.LinAlg.determinant(t) |> Nx.to_flat_list() |> hd()  > 2 do
+          {:halt, [i-1,acc]}
+        else
+        {:cont, [p(t,c) | acc]}
+        end
+      end
+    end)
+  end
+end
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Mand, <<70, 79, 82, 49, 0, 0, 16, ...>>, {:orb, 2}}
+```
+
+## Plotting function
+
+```elixir
+defmodule Chart do
+  def data(m,c) do
+    list = Mand.orb(m,c)
+    
+    {nb, points} = 
+      with [n,l] <- list,
+        {:integer_check, true} <- {:integer_check, is_integer(n)} do
+        {n, 
+          Nx.concatenate(l) 
+          |> Nx.to_flat_list()
+          |> Enum.chunk_every(4)
+          |> Enum.map(fn [x,_,y,_] -> [x,y] end)
+        }
+      else
+        {:integer_check, false} ->
+          :halt
+          
+        list -> 
+          {0, 
+            Nx.concatenate(list) 
+            |> Nx.to_flat_list()
+            |> Enum.chunk_every(4)
+            |> Enum.map(fn [x,_,y,_] -> [x,y] end)
+          }
+        
+      end
+    
+    # if |Zn| > 2, then stop computations is the point is not stable and Elixir -> NaN
+    # to plot this, I need to know the number of points.
+    n =  
+      cond do
+        nb == 0 -> m
+        nb < m -> nb
+        true -> m
+      end
+      
+    {nb, 
+      for i <- 0..n-1 do
+        %{"x" => Enum.at(Enum.at(points, i), 0), "y" => Enum.at(Enum.at(points, i), 1)}
+      end
+    }
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Chart, <<70, 79, 82, 49, 0, 0, 12, ...>>, {:data, 2}}
+```
+
+## Test points
+
+```elixir
+c = Mand.cx(0.49345,0.63345) 
+m  = 100
+Mand.orb(m,c)
+{nb1, data1} = Chart.data(m,c) 
+
+
+c = Mand.cx(0.67345,0.22345) 
+m  = 100
+{nb2, data2} = Chart.data(m,c)
+  
+{nb1, nb2}
+
+
+
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{29, 0}
+```
+
+<!-- livebook:{"attrs":"eyJjaGFydF90aXRsZSI6bnVsbCwiaGVpZ2h0Ijo2MDAsImxheWVycyI6W3siYWN0aXZlIjp0cnVlLCJjaGFydF90eXBlIjoicG9pbnQiLCJjb2xvcl9maWVsZCI6bnVsbCwiY29sb3JfZmllbGRfYWdncmVnYXRlIjpudWxsLCJjb2xvcl9maWVsZF9iaW4iOm51bGwsImNvbG9yX2ZpZWxkX3NjYWxlX3NjaGVtZSI6bnVsbCwiY29sb3JfZmllbGRfdHlwZSI6bnVsbCwiZGF0YV92YXJpYWJsZSI6ImRhdGExIiwiZ2VvZGF0YV9jb2xvciI6ImJsdWUiLCJsYXRpdHVkZV9maWVsZCI6bnVsbCwibG9uZ2l0dWRlX2ZpZWxkIjpudWxsLCJ4X2ZpZWxkIjoieCIsInhfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ4X2ZpZWxkX2JpbiI6bnVsbCwieF9maWVsZF9zY2FsZV90eXBlIjpudWxsLCJ4X2ZpZWxkX3R5cGUiOiJxdWFudGl0YXRpdmUiLCJ5X2ZpZWxkIjoieSIsInlfZmllbGRfYWdncmVnYXRlIjpudWxsLCJ5X2ZpZWxkX2JpbiI6bnVsbCwieV9maWVsZF9zY2FsZV90eXBlIjpudWxsLCJ5X2ZpZWxkX3R5cGUiOiJxdWFudGl0YXRpdmUifSx7ImFjdGl2ZSI6dHJ1ZSwiY2hhcnRfdHlwZSI6InBvaW50IiwiY29sb3JfZmllbGQiOiJ4IiwiY29sb3JfZmllbGRfYWdncmVnYXRlIjpudWxsLCJjb2xvcl9maWVsZF9iaW4iOm51bGwsImNvbG9yX2ZpZWxkX3NjYWxlX3NjaGVtZSI6bnVsbCwiY29sb3JfZmllbGRfdHlwZSI6InF1YW50aXRhdGl2ZSIsImRhdGFfdmFyaWFibGUiOiJkYXRhMiIsImdlb2RhdGFfY29sb3IiOiJibHVlIiwibGF0aXR1ZGVfZmllbGQiOm51bGwsImxvbmdpdHVkZV9maWVsZCI6bnVsbCwieF9maWVsZCI6IngiLCJ4X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieF9maWVsZF9iaW4iOm51bGwsInhfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieF9maWVsZF90eXBlIjoicXVhbnRpdGF0aXZlIiwieV9maWVsZCI6InkiLCJ5X2ZpZWxkX2FnZ3JlZ2F0ZSI6bnVsbCwieV9maWVsZF9iaW4iOm51bGwsInlfZmllbGRfc2NhbGVfdHlwZSI6bnVsbCwieV9maWVsZF90eXBlIjoicXVhbnRpdGF0aXZlIn1dLCJ2bF9hbGlhcyI6IkVsaXhpci5WZWdhTGl0ZSIsIndpZHRoIjo2MDB9","chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 600, height: 600)
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  |> VegaLite.data_from_values(data2, only: ["x", "y"])
+  |> VegaLite.mark(:point)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative)
+  |> VegaLite.encode_field(:color, "x", type: :quantitative)
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```vega-lite
+{"$schema":"https://vega.github.io/schema/vega-lite/v5.json","height":600,"layer":[{"data":{"values":[{"x":0.5102801324722843,"y":-1.7221361709891667},{"x":-1.1145651451908383,"y":0.4883905510981862},{"x":-0.5749745499681923,"y":-0.9755567017359696},{"x":0.3675334961056171,"y":-0.4654088747841085},{"x":-0.9322586322447799,"y":-0.0901258081200419},{"x":-0.3602675240448788,"y":-0.7540565768735177},{"x":0.39551145641266067,"y":-0.15246913195313583},{"x":-0.9746028209772917,"y":-0.24675737525803398},{"x":-0.26089358471831775,"y":-0.7410926281676709},{"x":-0.49437681580934184,"y":0.10886698640130377},{"x":-0.6088475791103791,"y":-0.6096082269768931},{"x":0.034908337360507635,"y":0.34149109963168023},{"x":-0.9047829604703284,"y":-0.5387707009451648},{"x":-0.07333437795990988,"y":-0.6455314798374245},{"x":-0.6482302541640215,"y":0.009318818243839289},{"x":-0.5031707950115043,"y":-0.6387183284645359},{"x":-0.025844131951963,"y":0.10192504190754459},{"x":-0.8182480227446896,"y":-0.4493594982611996},{"x":-0.15579216313509675,"y":-0.5908208026457787},{"x":0.5822353463283636,"y":0.036608218328761155},{"x":-1.0823576745195718,"y":-0.3095364102380395},{"x":-0.20396400536180626,"y":-0.7940459621475338},{"x":-0.5570164440193098,"y":0.1441572900332243},{"x":-0.598596140018891,"y":-0.6495258138556355},{"x":-0.024716576186814776,"y":0.3252030890955522},{"x":-0.8763118271623882,"y":-0.5469817132331739},{"x":-0.06943658138425801,"y":-0.62264216528976},{"x":-0.651216,"y":-0.008298194999999953},{"x":0.49345,"y":0.63345}]},"encoding":{"x":{"field":"x","type":"quantitative"},"y":{"field":"y","type":"quantitative"}},"mark":"point"},{"data":{"values":[{"x":-0.46333106754905123,"y":-0.12079450098935958},{"x":-0.47115487838910725,"y":-0.10894029088865922},{"x":-0.4662355181768637,"y":-0.12280242993831951},{"x":-0.46774935649257665,"y":-0.10758707485605894},{"x":-0.4699933153660163,"y":-0.12326018408762963},{"x":-0.4638126229144499,"y":-0.10800678006865108},{"x":-0.4737928169601797,"y":-0.12182879921230574},{"x":-0.46026520430806567,"y":-0.11039418126389254},{"x":-0.47670348847157584,"y":-0.11858085945478516},{"x":-0.4580920023376976,"y":-0.11446296814837983},{"x":-0.4778720353910907,"y":-0.11403369917055843},{"x":-0.45808411241566016,"y":-0.11942817690450537},{"x":-0.4767270629414905,"y":-0.10909997688579032},{"x":-0.460578978991743,"y":-0.12413725802742259},{"x":-0.47316438349824463,"y":-0.10494528480602117},{"x":-0.4652975806083812,"y":-0.12734293077457307},{"x":-0.46766484670109904,"y":-0.10275207758650752},{"x":-0.4713570233409225,"y":-0.12803237931833494},{"x":-0.4612912330725565,"y":-0.10342448960725947},{"x":-0.47744934150139506,"y":-0.12569449778201217},{"x":-0.4555363190830308,"y":-0.10729715515852195},{"x":-0.48210508590880646,"y":-0.12046423926696469},{"x":-0.452019975110503,"y":-0.11391726738166706},{"x":-0.4839782280740855,"y":-0.11315873965467522},{"x":-0.4520542856863833,"y":-0.12198895557185398},{"x":-0.482147795013205,"y":-0.10521778329958684},{"x":-0.456175369279193,"y":-0.12959075024944136},{"x":-0.47642180835381237,"y":-0.09850435906247865},{"x":-0.4638608796269248,"y":-0.13468008019776637},{"x":-0.46754794668760946,"y":-0.09493135456067456},{"x":-0.4736145236615047,"y":-0.1356785307656428},{"x":-0.45721816374968327,"y":-0.09598423268504502},{"x":-0.4833411177100571,"y":-0.13185901493220173},{"x":-0.4478453465188512,"y":-0.10225738168292314},{"x":-0.49076499176377775,"y":-0.12347316979713487},{"x":-0.44211858615030974,"y":-0.11306562688689525},{"x":-0.4937861098433257,"y":-0.11177346923360076},{"x":-0.4422712101991486,"y":-0.12625344832655155},{"x":-0.4908967186766777,"y":-0.09899898285678457},{"x":-0.44916123783450035,"y":-0.13853712949855118},{"x":-0.4817224081167176,"y":-0.0881346487839477},{"x":-0.46173421091069616,"y":-0.14652948386601533},{"x":-0.4674248372379686,"y":-0.08228116052680357},{"x":-0.4773756673278504,"y":-0.14785927429376602},{"x":-0.4506744967261962,"y":-0.08386399303193601},{"x":-0.49278258733380037,"y":-0.14163041730359624},{"x":-0.4353150258528285,"y":-0.0939774391385991},{"x":-0.5045746105476728,"y":-0.1282987274378208},{"x":-0.42585917743711443,"y":-0.11171682753770165},{"x":-0.5095221877022411,"y":-0.10964505095074872},{"x":-0.42631388777953033,"y":-0.13347553564582196},{"x":-0.5050451333233066,"y":-0.08907566712120019},{"x":-0.4380925288145642,"y":-0.15336295878225054},{"x":-0.49037175290441154,"y":-0.0714631713619642},{"x":-0.4588152481353108,"y":-0.1656296616728972},{"x":-0.4673976931988224,"y":-0.061853469934122135},{"x":-0.48369046964751444,"y":-0.16704539391032458},{"x":-0.44029795316055864,"y":-0.06405276890886089},{"x":-0.5077318171877889,"y":-0.15696990585896717},{"x":-0.41489385973341525,"y":-0.0801169896606192},{"x":-0.5263951265331668,"y":-0.13614583714269035},{"x":-0.39879372033797167,"y":-0.1094603029146506},{"x":-0.5348025967775903,"y":-0.10657174981215972},{"x":-0.3999911484102873,"y":-0.14610104580108546},{"x":-0.5280371545239053,"y":-0.07324196179779693},{"x":-0.42099636289084397,"y":-0.1783958858584594},{"x":-0.5044284150771928,"y":-0.04465858067754369},{"x":-0.4555543461905313,"y":-0.19623500556800583},{"x":-0.46769877924219205,"y":-0.02909457501267204},{"x":-0.49436023003977003,"y":-0.1965726743145303},{"x":-0.4243731548326214,"y":-0.031667089894117484},{"x":-0.5307698494360782,"y":-0.18066484966096344},{"x":-0.3818619991150928,"y":-0.05602174403080781},{"x":-0.5602792559825531,"y":-0.149415005268735},{"x":-0.3524250456074023,"y":-0.10503651152781464},{"x":-0.5758440387053164,"y":-0.10281732597112335},{"x":-0.3555141284552705,"y":-0.16965946550849137},{"x":-0.5658577388905437,"y":-0.04753008644626275},{"x":-0.39610953412222727,"y":-0.22205968097129133},{"x":-0.5266328970908263,"y":-0.0013200077666899734},{"x":-0.4544678203676349,"y":-0.24438473119353238},{"x":-0.46848840170469586,"y":0.022342848955659134},{"x":-0.5123466256384404,"y":-0.23986968651288976},{"x":-0.40189633970802197,"y":0.020427763194880877},{"x":-0.5641558888526007,"y":-0.21614394887456348},{"x":-0.3307810047150337,"y":-0.01104363766554653},{"x":-0.6106675188171148,"y":-0.17391326359218542},{"x":-0.2671652368225966,"y":-0.09270805026311868},{"x":-0.6454020927475994,"y":-0.10128720622851406},{"x":-0.27693787618539206,"y":-0.22055992386123777},{"x":-0.6296962680549711,"y":-0.002294817585380665},{"x":-0.36687567975899976,"y":-0.30140343802551306},{"x":-0.5580789083942804,"y":0.06984087451880486},{"x":-0.4639707723665697,"y":-0.31606611018062614},{"x":-0.46825162045802615,"y":0.09889566435459693},{"x":-0.5419017382259503,"y":-0.2974207698704523},{"x":-0.3758107978822934,"y":0.09841490756423191},{"x":-0.606642220969188,"y":-0.26528396511045},{"x":-0.269845,"y":0.07751480499999999},{"x":0.67345,"y":0.22345}]},"encoding":{"color":{"field":"x","type":"quantitative"},"x":{"field":"x","type":"quantitative"},"y":{"field":"y","type":"quantitative"}},"mark":"point"}],"width":600}
+```
