@@ -81,7 +81,7 @@ so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
 
 Lastly, consider $|c| > 2$. Then for every $n$, we have $|z_n| > |c|$. So:
 
-$$|z_{n+1}| \geq |z_n|^2 -|c| \geq |z_n|^2-|z_n| = |z_n|(|z_n|-1) \geq |z_n|(|c|-1) > |z_n| $$
+$$|z_{n+1}| \geq |z_n|^2 -|c| \geq |z_n|^2-|z_n| = |z_n|(|z_n|-1) \geq |z_n|(|c|-1) > |z_n|$$
 
 so the term grows to infinity and "escapes".
 
