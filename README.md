@@ -75,13 +75,13 @@ Then, we can parallelise the computations - associating a colour to each point o
 
 Firstly consider some $|c|\leq 2$ and suppose that for some $N$, we have $|z_N|= 2+a$ with $a>0$. Then:
 
-$$|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a \\= |z_N|+a$$
+$$|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a = |z_N|+a$$
 
 so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
 
-Lastly, consider $|c|>2$. Then for every $n$, we have $|z_n|>|c|$. So:
+Lastly, consider $|c| > 2$. Then for every $n$, we have $|z_n| > |c|$. So:
 
-$$|z_{n+1}| \geq |z_n|^2 -|c|\geq |z_n|^2-|z_n| \\ =|z_n|(|z_n|-1)\geq |z_n|(|c|-1)\\>|z_n| $$
+$$|z_{n+1}| \geq |z_n|^2 -|c|\geq |z_n|^2-|z_n| =|z_n|(|z_n|-1)\geq |z_n|(|c|-1)>|z_n| $$
 
 so the term grows to infinity and "escapes".
 
