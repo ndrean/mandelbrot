@@ -27,18 +27,6 @@ In fact, this set is contained in a disk $D_2$ of radius 2. This does not mean t
 
 We have a more precise criteria: whenever the absolute value $|z_n|$ is greater that 2, then the absolute values of the following iterates grow to infinity.
 
-<details><summary>Proof </summary>
-
-> Firstly consider some $|c|\leq 2$ and suppose that for some $N$, we have $|z_N|= 2+a$ with $a>0$. Then:
-> $$|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a \\= |z_N|+a$$
-> so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
-
-> Lastly, consider $|c|>2$. Then for every $n$, we have $|z_n|>|c|$. So:
-> $$|z_{n+1}| \geq |z_n|^2 -|c|\geq |z_n|^2-|z_n| \\ =|z_n|(|z_n|-1)\geq |z_n|(|c|-1)\\>|z_n| $$ so the term grows to infinity and "escapes".
-
-</details>
-<br/>
-
 The **Mandelbrot set** $M$ is the set of numbers $c$ such that its sequence $O_c$ remains bounded (in absolute value). This means that $|z_{n}(c)|<2$ for any $n$.
 
 When the sequence $O_c$ is _unbounded_, we associate to $c$ the first integer $N(c)$ such that $| z_{N}(c)|>2$.
@@ -51,7 +39,9 @@ So to each $c$ in the plane, we can associate an integer $n$, whether `null` or 
 Furthermore, we decide to associate each integer $n$ a certain RGB colour.
 
 With this map:
+
 $$c \mapsto n(c) \Leftrightarrow \mathrm{colour} = f\big(R(n),G(n),B(n)\big)$$
+
 we are able to plot something.
 
 By convention it is **black** for `null`, when the orbit $O_c$ remains bounded.
@@ -71,16 +61,32 @@ In order to save computations, we firstly note that the image is symetric upon t
 
 Then, we can parallelise the computations - associating a colour to each point of the plan - since they are all independant.
 
->
+## The algorithm:
 
-</details>
+- instantiate a slice pixels of length say 1_000 x 1_000 x 3 = 3_000_000 bytes (u8)
+- loop over 1..1000 rows, `i`
+  - loop over 1..1_000 columns, `j`
+  - compute the coordinate c in the complex plan corresponding to the pixel `(i,j)`
+  - compute the iterations `n`, the length of the orbit of c,
+  - compute the RGB colours for this n: it is a length 3 array `col= [ R(n), G(n), B(n) ]`
+  - append to pixels at position `( i + j ) * 3` to this array.
 
-<details><summary>Fun topological fact</summary>
+<details><summary>Fun math facts</summary>
+
+> Firstly consider some $|c|\leq 2$ and suppose that for some $N$, we have $|z_N|= 2+a$ with $a>0$. Then:
+> $$|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a \\= |z_N|+a$$
+> so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
+
+> Lastly, consider $|c|>2$. Then for every $n$, we have $|z_n|>|c|$. So:
+> $$|z_{n+1}| \geq |z_n|^2 -|c|\geq |z_n|^2-|z_n| \\ =|z_n|(|z_n|-1)\geq |z_n|(|c|-1)\\>|z_n| $$ so the term grows to infinity and "escapes".
+
+<br/>
 
 The _mandelbrot set_ $M$ is **compact**, as _closed_ and bounded (contained in the disk of radius 2).
 It is also surprisingly _connected_.
 
-Fix an integer $n\geq 1$ and consider the set $M_n$ of complex numbers $c$ such that there absolute value at the rank $n$ is less than 2. In other words, $M_n=\{c\in\mathbb{C}, \, |z_n(c)|\leq 2\}$. Then the complex numbers Mandelbrot-stable are precisely the numbers in all these $ M_n$, thus $M = \bigcap_n M_n$.
-We conclude by remarking that each $M_n$ is closed as a preimage of the closed set $ [0,2]$ by a continous function, and since $M$ is an intersection of closed sets (not necesserally countable), it is closed.
+> Fix an integer $n\geq 1$ and consider the set $M_n$ of complex numbers $c$ such that there absolute value at the rank $n$ is less than 2. In other words, $M_n=\{c\in\mathbb{C}, \, |z_n(c)|\leq 2\}$. Then the complex numbers Mandelbrot-stable are precisely the numbers in all these $ M_n$, thus $M = \bigcap_n M_n$.
+> We conclude by remarking that each $M_n$ is closed as a preimage of the closed set $ [0,2]$ by a continous function, and since $M$ is an intersection of closed sets (not necesserally countable), it is closed.
 
 </details>
+<br/>
