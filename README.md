@@ -23,6 +23,85 @@ The terms of sequence $O_c = \{z_n\;,\; n\geq 1\}$ is also called the orbit of $
 This sequence may or not remain bounded in absolute value.
 For example, for $c=1$, we have the orbit $O_1 = \{ 0, 1, 2, 5, 26,\dots\}$ but for $c=-1$, we have a cyclic orbit, $O_{-1} = \{−1, 0, −1, 0,\dots\}$.
 
+The goal here is to attribute an interation number $n$ to each complex $c$. This iteration number represents the indice of the orbit where either $z_n$ leaves the disk of radius 2 or stays in it after say $m=100$ iterations.
+
+With this $n$, we will associate a colour R,G,B to visualise the stability.
+
+Then, from a given canvas of say 1000 x 1000 pixels, we associate each pixel with a point $c$ in hte complex plan. We will then be able to produce a colourful image representing this Mandelbrot set.
+
+## First evaluation of orbits of points
+
+We firstly evaluated in a Livebook how stable the orbits are for some points.
+
+With this code, we see that running 100 iterates takes around 0.1ms.
+We see that Elixir would take for a coarse grained image of 1000 x 1000 a minimum of 100s.
+
+Zig might bit indeed a better fit.
+
+<details><summary>Orbits</summary>
+
+```elixir
+Mix.install(
+  [
+    {:kino_vega_lite, "~> 0.1.11"},
+    {:complex, "~> 0.5.0"}
+  ]
+)
+
+
+defmodule Mandelbrot do
+  def p(z,c) do
+    Complex.multiply(z,z) |> Complex.add(c)
+  end
+
+  def orb(1,c), do: c
+  def orb(n,c) do
+    Enum.reduce_while(1..n, [c], fn i, acc ->
+      case acc do
+       [c] ->
+          %{re: re, im: im} = c
+          if re*re+im*im  > 4 do
+            {:halt, {i,acc}}
+          else
+            {:cont,[p(c,c) | acc]}
+          end
+        [t |_ ] = acc ->
+          %{re: re, im: im} = t
+          cond do
+            re*re+im*im  > 10 ->
+              IO.puts "escapes"
+              {:halt, {i, acc}}
+            i == n-1 ->
+              IO.puts "stable until"
+              {:halt, {i, acc}}
+            true ->
+              {:cont, [p(t,c) | acc]}
+          end
+      end
+    end)
+  end
+end
+
+defmodule Chart do
+  def data(n,c) do
+    {nb, points} = Mand.orb(n,c)
+     points =  Enum.map(points, fn %{re: re, im: im} -> [re,im] end)
+
+    # you can't plot more points than you have
+    n = if nb<n, do: nb, else: n
+
+    for i <- 0..n-1 do
+        %{"x" => Enum.at(Enum.at(points, i), 0), "y" => Enum.at(Enum.at(points, i), 1)}
+    end
+  end
+end
+```
+
+</details>
+<br/>
+
+## Details of the mandelbrot set
+
 In fact, this set is contained in a disk $D_2$ of radius 2. This does not mean that $0_c$ is bounded whenever $|c|\leq 2$ as seen above. Merely $0_c$ is certainly unbounded - the sequence of $z_n$ is divergent whenever $|c| > 2$.
 
 We have a more precise criteria: whenever the absolute value $|z_n|$ is greater that 2, then the absolute values of the following iterates grow to infinity.
