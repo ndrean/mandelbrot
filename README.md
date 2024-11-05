@@ -7,6 +7,9 @@ Source:
 - [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set)
 - [Plotting algorithm](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set)
 
+<img width="613" alt="Screenshot 2024-11-05 at 19 35 32" src="https://github.com/user-attachments/assets/9eb71bec-b77e-4d04-bc88-bb86d19d6219">
+
+
 Given a complex number $c$ and a polynomial $p_c(x)=x^2+c$, we compute the sequence of iterates:
 
 $$O_c = \{ p_c(0), p_c(p_c(0)), p_c(p_c(p_c(0))),...\}$$
