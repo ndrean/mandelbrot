@@ -64,7 +64,7 @@ nil
 
 ## Orbit and iteration number
 
-Given a (complex) number $c$, we compute the __orbit__ of $c$ under the map $p: z\mapsto z^2+c$.
+Given a (complex) number $c$, we compute the **orbit** of $c$ under the map $p: z\mapsto z^2+c$.
 
 Starting with $z_0 = 0$, we have:
 
@@ -105,11 +105,11 @@ defmodule Orbit do
   end
 
   defn number(c,max_iter) do
-      {_, _, j} = 
+      {_, _, j} =
         while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
-            {poly(z,c), c,i-1} 
+            {poly(z,c), c,i-1}
       end
-      
+
       cond do
         Nx.equal(j, 1) -> 0
         true -> max_iter - j
@@ -133,7 +133,7 @@ end
 #  end
 
 #  defn number(c, max_iter) do
-#    {_, _, j} =  
+#    {_, _, j} =
 #    while {z = c, c, i = max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Nmx.sq_norm(z), 4)) do
 #      {poly(z,c), c, i-1}
 #    end
@@ -166,7 +166,7 @@ nil
 nil
 ```
 
-__Examples__:
+**Examples**:
 
 ```elixir
 st = Ncx.new(0.2, 0.2)
@@ -179,9 +179,9 @@ iter_dv1 = Orbit.number(dv1, iter_max) #<- we should find 8 iterations before z_
 iter_dv2 = Orbit.number(dv2, iter_max) #<- we should find 14 iterations before z_n escapes from the disk 2
 iter_st = Orbit.number(st, iter_max) #<- this point is stable and the loop reaches n interations.
 
-%{ 
+%{
   "#{Nx.to_number(dv2)}" => iter_dv2 |> Nx.to_number(),
-  "#{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(), 
+  "#{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(),
   "#{Nx.to_number(st)}" => iter_st ,
 }
 ```
@@ -215,7 +215,7 @@ defmodule Colour do
   defn normalize(n, max_iter) do
     n/ max_iter
   end
-  
+
   defn rgb(n) do
     cond do
       Nx.less(n, 5) ->
@@ -291,7 +291,7 @@ end
 {:module, Pixel, <<70, 79, 82, 49, 0, 0, 12, ...>>, true}
 ```
 
-__Example__: we define a complex plane of interest by two points: the top-left and the bottom-right.
+**Example**: we define a complex plane of interest by two points: the top-left and the bottom-right.
 
 ```elixir
 top_left_x = -2
@@ -349,7 +349,7 @@ point = Nx.tensor([30,60])
 
 ## Computing the Mandelbrot set
 
-__Example__:
+**Example**:
 
 ```elixir
 dim = {100,100}
@@ -363,7 +363,7 @@ nm_i_j = Colour.normalize(n_i_j, iter_max)
 
 p = Nx.tensor([55,95])
 c_i_j = Pixel.project(p,dim, defining_points)
-n_i_j = Orbit.number(c_i_j, iter_max) 
+n_i_j = Orbit.number(c_i_j, iter_max)
 nm_i_j = Colour.normalize(n_i_j, iter_max)
 {Nx.to_number(n_i_j), Colour.rgb(nm_i_j)}
 
@@ -397,21 +397,21 @@ nm_i_j = Colour.normalize(n_i_j, iter_max)
 defmodule Mandelbrot do
   import Nx.Defn
 
-  defn compute() do
+  defn compute(opts) do
     #top_left_x = -2; top_left_y = 1.2; bottom_right_x = 1; bottom_right_y = -top_left_y
     #defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
-    h = w = 500
-  
-    max_iter = 30
+    h = opts[:h]
+    w = opts[:w]
+    max_iter = otps[:max_iter]
     defining_points = {-2, 1.2, 1, -1.2}
-    
+
     iota_rows = Nx.iota({h}, type: :u16) |> Nx.vectorize(:rows)
     iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
     cross_product = Nx.stack([iota_rows, iota_cols])
-    
+
     Pixel.project(cross_product,{h,w}, defining_points)
-      |> Orbit.number(max_iter) 
+      |> Orbit.number(max_iter)
       |> Colour.normalize(max_iter)
       |> Colour.rgb()
       |> Nx.devectorize()
@@ -429,6 +429,6 @@ end
 ```
 
 ```elixir
-Mandelbrot.compute()
+Mandelbrot.compute(h: 300, w: 300, max_iter: 50)
 |> Kino.Image.new()
 ```
