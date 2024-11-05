@@ -6,8 +6,8 @@ const zigimg = @import("zigimg");
 
 const print = std.debug.print;
 
-const IMAX: usize = 200;
-const RESOLUTION = [_]u64{ 40_000, 40_000 };
+const IMAX: usize = 100;
+const RESOLUTION = [_]u64{ 30_000, 30_000 };
 
 test "complex" {
     const c1 = Cx.init(1.0, 0.0);
@@ -33,7 +33,7 @@ test "sqnorm" {
 ///  It escapes when (norm > 4) or when it reaches max_iter.
 ///
 /// Returns the number of iterations when escapes or null if it didn't escape
-fn getIter(c: Cx) ?usize {
+fn iterationNumber(c: Cx) ?usize {
     if (c.re > 0.6 or c.re < -2.1) return null;
     if (c.im > 1.2 or c.im < -1.2) return null;
     // first cardiod
@@ -50,12 +50,12 @@ fn getIter(c: Cx) ?usize {
 
 test "iter when captured" {
     const c = Cx{ .re = 0.0, .im = 0.0 };
-    const iter = getIter(c);
+    const iter = iterationNumber(c);
     try std.testing.expect(iter == null);
 }
 test "iter if escapes" {
     const c = Cx{ .re = 1.0, .im = 1.0 };
-    const iter = getIter(c);
+    const iter = iterationNumber(c);
     try std.testing.expect(iter != null);
 }
 
@@ -111,10 +111,16 @@ const Context = struct {
 /// should map to 0.5 + 0.5i
 fn pixelToComplex(pix: [2]u64, ctx: Context) Cx {
     const w = ctx.bottomRight.re - ctx.topLeft.re;
-    const h = ctx.topLeft.im - ctx.bottomRight.im;
-    const re = @as(f64, @floatFromInt(pix[0])) / @as(f64, @floatFromInt(ctx.resolution[0])) * w;
-    const im = @as(f64, @floatFromInt(pix[1])) / @as(f64, @floatFromInt(ctx.resolution[1])) * h;
-    return Cx{ .re = (ctx.topLeft.re + re) * w, .im = (ctx.topLeft.im - im) * h };
+    const h = -ctx.topLeft.im + ctx.bottomRight.im;
+    const scale_x = w / @as(f64, @floatFromInt(ctx.resolution[0] - 1));
+    const scale_y = h / @as(f64, @floatFromInt(ctx.resolution[1] - 1));
+
+    const re = ctx.topLeft.re + scale_x * @as(f64, @floatFromInt(pix[0]));
+    const im = ctx.topLeft.im + scale_y * @as(f64, @floatFromInt(pix[1]));
+    return Cx{ .re = re, .im = im };
+
+    // const re = @as(f64, @floatFromInt(pix[0])) / @as(f64, @floatFromInt(ctx.resolution[0])) * w;
+    // const im = @as(f64, @floatFromInt(pix[1])) / @as(f64, @floatFromInt(ctx.resolution[1])) * h;
 }
 
 // test "pixelToComplex" {
@@ -150,7 +156,7 @@ fn createUnthreadedSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
     for (0..rows_to_process) |current_row| {
         for (0..ctx.resolution[0]) |current_col| {
             const c = pixelToComplex(.{ @as(u64, @intCast(current_col)), @as(u64, @intCast(current_row)) }, ctx);
-            const iter = getIter(c);
+            const iter = iterationNumber(c);
             const colour = createRgb(iter);
             const pixel_index = (current_row * ctx.resolution[0] + current_col) * 3;
             // copy RGB values to consecutive memory locations
@@ -191,7 +197,7 @@ fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
         // loop over columns
         for (0..ctx.resolution[1]) |col_id| {
             const c = pixelToComplex(.{ @as(u64, @intCast(col_id)), @as(u64, @intCast(row_id)) }, ctx);
-            const iter = getIter(c);
+            const iter = iterationNumber(c);
             const colour = createRgb(iter);
 
             const p_idx = (row_id * ctx.resolution[0] + col_id) * 3;
@@ -243,40 +249,7 @@ fn createBands(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
     return pixels;
 }
 
-fn createPlentyThreadsSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
-    const pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
-    errdefer allocator.free(pixels);
-
-    const cpus = try std.Thread.getCpuCount();
-    var threads = try allocator.alloc(std.Thread, cpus);
-
-    defer allocator.free(threads);
-
-    const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
-    var current_row: usize = 0;
-
-    while (current_row < rows_to_process) {
-        var spawned_threads: usize = 0;
-
-        // Spawn up to cpus threads or remaining rows, whichever is smaller
-        while (spawned_threads < cpus and current_row + spawned_threads < rows_to_process) {
-            const row = current_row + spawned_threads;
-
-            const args = .{ ctx, pixels, row };
-            threads[spawned_threads] = try std.Thread.spawn(.{}, processRow, args);
-            spawned_threads += 1;
-        }
-
-        // Wait for all spawned threads to complete
-        for (threads[0..spawned_threads]) |thread| {
-            thread.join();
-        }
-
-        current_row += spawned_threads;
-    }
-
-    return pixels;
-}
+//
 
 // test "createSlice" {
 //     _ = try createSlice(.{ 100, 200 }, Cx{ .re = -1, .im = 1 }, Cx{ .re = 1, .im = -1 }, std.testing.allocator);
@@ -307,3 +280,38 @@ pub fn main() !void {
     print("Writing to PNG after: {}\n", .{t1 - t0});
     try writeToPNG("mandelbrotband.png", pixels, RESOLUTION, allocator);
 }
+
+// fn createPlentyThreadsSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
+//     const pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
+//     errdefer allocator.free(pixels);
+
+//     const cpus = try std.Thread.getCpuCount();
+//     var threads = try allocator.alloc(std.Thread, cpus);
+
+//     defer allocator.free(threads);
+
+//     const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
+//     var current_row: usize = 0;
+
+//     while (current_row < rows_to_process) {
+//         var spawned_threads: usize = 0;
+
+//         // Spawn up to cpus threads or remaining rows, whichever is smaller
+//         while (spawned_threads < cpus and current_row + spawned_threads < rows_to_process) {
+//             const row = current_row + spawned_threads;
+
+//             const args = .{ ctx, pixels, row };
+//             threads[spawned_threads] = try std.Thread.spawn(.{}, processRow, args);
+//             spawned_threads += 1;
+//         }
+
+//         // Wait for all spawned threads to complete
+//         for (threads[0..spawned_threads]) |thread| {
+//             thread.join();
+//         }
+
+//         current_row += spawned_threads;
+//     }
+
+//     return pixels;
+// }
