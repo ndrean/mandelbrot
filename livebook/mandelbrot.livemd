@@ -1,0 +1,434 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Mandelbrot set with Numerical Elixir
+
+```elixir
+Mix.install(
+  [
+    {:nx, "~> 0.9.1"},
+    {:exla, "~> 0.9.1"},
+    {:kino, "~> 0.14.2"}
+  ],
+  config: [nx: [default_backend: EXLA.Backend]]
+)
+
+Nx.Defn.global_default_options(compiler: EXLA, client: :host)
+```
+
+## Numerical Complex interface
+
+```elixir
+defmodule Ncx do
+  import Nx.Defn
+  # import Nx.Constants, only: [i: 1]
+
+  defn i() do
+    Nx.Constants.i()
+  end
+
+  defn new(x,y) do
+    x + i() * y
+  end
+
+  defn sq_norm(z) do
+    Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Ncx, <<70, 79, 82, 49, 0, 0, 14, ...>>, true}
+```
+
+```elixir
+#defmodule Nmx do
+#  import Nx.Defn
+
+#  defn new(x,y) do
+#    Nx.stack([x,-y,y,x]) |> Nx.reshape({2,2}, names: [:x, :y])
+#  end
+
+#  defn sq_norm(z) do
+#    Nx.LinAlg.determinant(z)
+#  end
+#end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+nil
+```
+
+## Orbit and iteration number
+
+Given a (complex) number $c$, we compute the __orbit__ of $c$ under the map $p: z\mapsto z^2+c$.
+
+Starting with $z_0 = 0$, we have:
+
+$z_1=p(z_0) = c$
+
+$z_2=p(z_1) = c^2+c$
+
+$z_3=p(z_2) = c^4+2c^3+c^2+c$
+
+...
+
+The orbit of $c$ is the set of $(z_n)$. These numbers $z_n$ may be bounded or not (in absolute value).
+
+It turns out that 2 is the upper bound such that $|z_n|$ is bounded. This means whenever some $|z_n|\geq 2$, then $ z_n \to \infty$. In other words, once some $z_n$ is out of the disk of radius 2, it escapes forever.
+
+:exclamation: However this does not mean that every point in this disk has a bounded orbit.
+
+THerefor, we want to compute the index $n$ when the orbit escapes from the disk 2, if any. With this number, we will define a colour which represents how fast (small index) or not this point escapes.
+
+Since the orbit may stay within the disk 2 (ie bounded, when periodic for example), we have to set a _maximum number of iterations_, noted $m$.
+
+Whenever the values $z_n$ are less than 2 whilst $n$ reaches this maximum $m$, we return $0$. These points are said "Mandelbrot stable".
+
+Otherwise, we return the first $n$ such that $|z_n|>2$.
+
+> we change the condition $|z_n|<2$ to the equivalent condition $|z_n|^2<4$ to avoid computing a square root.
+
+The module below does this by defining numerical functions via `defn`.
+
+> Note how we loop using the `Nx` versions of `while` and the double condition managed by`Nx.logical_and`, and also the `Nx` version of `cond`. These macros delegate the code to the backend for performance.
+
+```elixir
+defmodule Orbit do
+  import Nx.Defn
+
+  defn poly(z,c) do
+    z*z + c
+  end
+
+  defn number(c,max_iter) do
+      {_, _, j} = 
+        while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
+            {poly(z,c), c,i-1} 
+      end
+      
+      cond do
+        Nx.equal(j, 1) -> 0
+        true -> max_iter - j
+      end
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Orbit, <<70, 79, 82, 49, 0, 0, 16, ...>>, true}
+```
+
+```elixir
+#defmodule Morbit do
+#  import Nx.Defn
+
+#  defn poly(z,c) do
+#    Nx.dot(z,z) |> Nx.add(c)
+#  end
+
+#  defn number(c, max_iter) do
+#    {_, _, j} =  
+#    while {z = c, c, i = max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Nmx.sq_norm(z), 4)) do
+#      {poly(z,c), c, i-1}
+#    end
+
+ #   cond do
+ #       Nx.equal(j, 1) -> 0
+ #       true -> max_iter - j
+ #     end
+ # end
+#end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+nil
+```
+
+```elixir
+#dv = Nmx.new(0.3, 0.6)
+#Morbit.number(dv, 50)
+
+#dv = Nmx.new(0.4,0.4)
+#Morbit.number(dv, 50)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+nil
+```
+
+__Examples__:
+
+```elixir
+st = Ncx.new(0.2, 0.2)
+dv1 = Ncx.new(0.4, 0.4)
+dv2 = Ncx.new(0.3, 0.6)
+
+iter_max = 100
+
+iter_dv1 = Orbit.number(dv1, iter_max) #<- we should find 8 iterations before z_n escapes from the disk 2
+iter_dv2 = Orbit.number(dv2, iter_max) #<- we should find 14 iterations before z_n escapes from the disk 2
+iter_st = Orbit.number(st, iter_max) #<- this point is stable and the loop reaches n interations.
+
+%{ 
+  "#{Nx.to_number(dv2)}" => iter_dv2 |> Nx.to_number(),
+  "#{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(), 
+  "#{Nx.to_number(st)}" => iter_st ,
+}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%{
+  "0.20000000298023224+0.20000000298023224i" => #Nx.Tensor<
+    s32
+    EXLA.Backend<host:0, 0.1731897335.3414818829.145502>
+    0
+  >,
+  "0.30000001192092896+0.6000000238418579i" => 14,
+  "0.4000000059604645+0.4000000059604645i" => 8
+}
+```
+
+## Colour calculation
+
+To each integer $n$ found above, we want to return a colour $[r,g,b]$.
+
+This will help us to visualise which point of the complex plane is stable, and if not how fast it escapes. The colour gives a visual impression of this "escaping speed".
+
+> We stay under the `Defn` goodness. Note the type casting `Nx.type_as`.
+
+```elixir
+defmodule Colour do
+  import Nx.Defn
+
+  defn normalize(n, max_iter) do
+    n/ max_iter
+  end
+  
+  defn rgb(n) do
+    cond do
+      Nx.less(n, 5) ->
+        scaled = n * 2
+        r = 255 * (1 - scaled)
+        g = 255 * (1 - scaled / 2)
+        b = 128 * scaled
+        Nx.stack([r, g, b]) |> Nx.as_type(:u8)
+      true ->
+        scaled = (n - 0.5) * 2;
+        g = 128 * (1 - scaled)
+        b = 128 * (1 + scaled / 2)
+         Nx.stack([0, g, b]) |> Nx.as_type(:u8)
+    end
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Colour, <<70, 79, 82, 49, 0, 0, 15, ...>>, true}
+```
+
+```elixir
+n = 30; max_iter = 100
+
+Colour.normalize(n, max_iter)  |> Colour.rgb()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  u8[3]
+  EXLA.Backend<host:0, 0.1731897335.3414818829.145514>
+  [101, 178, 76]
+>
+```
+
+## Pixel to complex plan
+
+We quantitize the complex plane by mapping pixels to complex numbers.
+
+Given a granularity of say 1M pixels (1000 x 1000 pixels), we map each pixel to a point in the complex plan by calculating the coordinates.
+
+This is what the module below does.
+
+```elixir
+defmodule Pixel do
+  import Nx.Defn
+
+  defn project(index, {h,w}, {top_left_x, top_left_y, bottom_right_x,bottom_right_y}) do
+    i = index[0]
+    j = index[1]
+    scale_x = Nx.divide(bottom_right_x-top_left_x, w-1)
+    scale_y = Nx.divide(bottom_right_y-top_left_y, h-1)
+    Ncx.new(
+      top_left_x + Nx.dot(j,scale_x),
+      top_left_y + Nx.dot(i, scale_y)
+    )
+    #Nmx.new(
+    #  top_left_x + Nx.dot(j,scale_x),
+    #  top_left_y + Nx.dot(i, scale_y)
+    #)
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Pixel, <<70, 79, 82, 49, 0, 0, 12, ...>>, true}
+```
+
+__Example__: we define a complex plane of interest by two points: the top-left and the bottom-right.
+
+```elixir
+top_left_x = -2
+top_left_y = 1.2
+bottom_right_x = 1
+bottom_right_y = -top_left_y
+
+defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
+
+%{
+  top_left: Ncx.new(-2,1.2)|> Nx.to_number(),
+  bottom_right: Ncx.new(1,1.2) |> Nx.to_number()
+}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%{top_left: -2.0+1.2000000476837158i, bottom_right: 1.0+1.2000000476837158i}
+```
+
+We can map each pixel of an image 100 x 100 (height x width pixels) into the complex plan defined previously.
+
+Below a bunch of points defined by their pixel coordinates (eg 30,60) are mapped into the complex plane
+
+```elixir
+dim = {100,100}
+
+topleft = Nx.tensor([0,0])
+bottomright = Nx.tensor([99,99])
+topright = Nx.tensor([0,99])
+bottomleft = Nx.tensor([99,0])
+point = Nx.tensor([30,60])
+
+%{
+  topleft: Pixel.project(topleft, dim, defining_points) |> Nx.to_number(),
+  bottomright: Pixel.project(bottomright, dim, defining_points) |> Nx.to_number(),
+  topright: Pixel.project(topright, dim, defining_points) |> Nx.to_number(),
+  bottomleft: Pixel.project(bottomleft, dim, defining_points) |> Nx.to_number(),
+  point: Pixel.project(point, dim, defining_points) |> Nx.to_number()
+}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%{
+  topleft: -2.0+1.2000000476837158i,
+  bottomright: 1.0000001192092896-1.2000000476837158i,
+  topright: 1.0000001192092896+1.2000000476837158i,
+  bottomleft: -2.0-1.2000000476837158i,
+  point: -0.1818181276321411+0.47272729873657227i
+}
+```
+
+## Computing the Mandelbrot set
+
+__Example__:
+
+```elixir
+dim = {100,100}
+iter_max = 50
+
+p = Nx.tensor([300,400])
+c_i_j = Pixel.project(p,dim, defining_points)
+n_i_j = Orbit.number(c_i_j, iter_max)
+nm_i_j = Colour.normalize(n_i_j, iter_max)
+{Nx.to_number(n_i_j), Colour.rgb(nm_i_j)} |> dbg()
+
+p = Nx.tensor([55,95])
+c_i_j = Pixel.project(p,dim, defining_points)
+n_i_j = Orbit.number(c_i_j, iter_max) 
+nm_i_j = Colour.normalize(n_i_j, iter_max)
+{Nx.to_number(n_i_j), Colour.rgb(nm_i_j)}
+
+
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{0,
+ #Nx.Tensor<
+   u8[3]
+   EXLA.Backend<host:0, 0.1731897335.3414818829.145541>
+   [255, 255, 0]
+ >}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{2,
+ #Nx.Tensor<
+   u8[3]
+   EXLA.Backend<host:0, 0.1731897335.3414818829.145545>
+   [234, 244, 10]
+ >}
+```
+
+```elixir
+defmodule Mandelbrot do
+  import Nx.Defn
+
+  defn compute() do
+    #top_left_x = -2; top_left_y = 1.2; bottom_right_x = 1; bottom_right_y = -top_left_y
+    #defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
+
+    h = w = 500
+  
+    max_iter = 30
+    defining_points = {-2, 1.2, 1, -1.2}
+    
+    iota_rows = Nx.iota({h}, type: :u16) |> Nx.vectorize(:rows)
+    iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
+    cross_product = Nx.stack([iota_rows, iota_cols])
+    
+    Pixel.project(cross_product,{h,w}, defining_points)
+      |> Orbit.number(max_iter) 
+      |> Colour.normalize(max_iter)
+      |> Colour.rgb()
+      |> Nx.devectorize()
+      |> Nx.reshape({h, w, 3})
+      |> Nx.as_type(:u8)
+  end
+end
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Mandelbrot, <<70, 79, 82, 49, 0, 0, 12, ...>>, true}
+```
+
+```elixir
+Mandelbrot.compute()
+|> Kino.Image.new()
+```
