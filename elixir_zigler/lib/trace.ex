@@ -1,6 +1,6 @@
-defmodule ZiglerRaytracer.RayTracer do
+defmodule Ziggy.Tracer do
   # , local_zig: true
-  use Zig
+  use Zig, opt_App: :zigler
 
   ~Z"""
   const INF = 100000000;

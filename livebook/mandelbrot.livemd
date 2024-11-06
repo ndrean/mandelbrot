@@ -1,5 +1,3 @@
-<!-- livebook:{"persist_outputs":true} -->
-
 # Mandelbrot set with Numerical Elixir
 
 ```elixir
@@ -16,6 +14,8 @@ Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
 ## Numerical Complex interface
+
+When you use `defn`, all the arguments are treated as _tensors_ .
 
 ```elixir
 defmodule Ncx do
@@ -34,32 +34,6 @@ defmodule Ncx do
     Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
   end
 end
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-{:module, Ncx, <<70, 79, 82, 49, 0, 0, 14, ...>>, true}
-```
-
-```elixir
-#defmodule Nmx do
-#  import Nx.Defn
-
-#  defn new(x,y) do
-#    Nx.stack([x,-y,y,x]) |> Nx.reshape({2,2}, names: [:x, :y])
-#  end
-
-#  defn sq_norm(z) do
-#    Nx.LinAlg.determinant(z)
-#  end
-#end
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-nil
 ```
 
 ## Orbit and iteration number
@@ -104,7 +78,15 @@ defmodule Orbit do
     z*z + c
   end
 
+
   defn number(c,max_iter) do
+    condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
+    max_iter = if condition < 0.0625 do
+      1
+    else
+      max_iter
+    end
+    
       {_, _, j} =
         while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
             {poly(z,c), c,i-1}
@@ -116,54 +98,6 @@ defmodule Orbit do
       end
   end
 end
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-{:module, Orbit, <<70, 79, 82, 49, 0, 0, 16, ...>>, true}
-```
-
-```elixir
-#defmodule Morbit do
-#  import Nx.Defn
-
-#  defn poly(z,c) do
-#    Nx.dot(z,z) |> Nx.add(c)
-#  end
-
-#  defn number(c, max_iter) do
-#    {_, _, j} =
-#    while {z = c, c, i = max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Nmx.sq_norm(z), 4)) do
-#      {poly(z,c), c, i-1}
-#    end
-
- #   cond do
- #       Nx.equal(j, 1) -> 0
- #       true -> max_iter - j
- #     end
- # end
-#end
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-nil
-```
-
-```elixir
-#dv = Nmx.new(0.3, 0.6)
-#Morbit.number(dv, 50)
-
-#dv = Nmx.new(0.4,0.4)
-#Morbit.number(dv, 50)
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-nil
 ```
 
 **Examples**:
@@ -186,20 +120,6 @@ iter_st = Orbit.number(st, iter_max) #<- this point is stable and the loop reach
 }
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-%{
-  "0.20000000298023224+0.20000000298023224i" => #Nx.Tensor<
-    s32
-    EXLA.Backend<host:0, 0.1731897335.3414818829.145502>
-    0
-  >,
-  "0.30000001192092896+0.6000000238418579i" => 14,
-  "0.4000000059604645+0.4000000059604645i" => 8
-}
-```
-
 ## Colour calculation
 
 To each integer $n$ found above, we want to return a colour $[r,g,b]$.
@@ -213,7 +133,7 @@ defmodule Colour do
   import Nx.Defn
 
   defn normalize(n, max_iter) do
-    n/ max_iter
+    n / max_iter
   end
 
   defn rgb(n) do
@@ -234,26 +154,10 @@ defmodule Colour do
 end
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-{:module, Colour, <<70, 79, 82, 49, 0, 0, 15, ...>>, true}
-```
-
 ```elixir
-n = 30; max_iter = 100
+n = 100; max_iter = 100
 
 Colour.normalize(n, max_iter)  |> Colour.rgb()
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-#Nx.Tensor<
-  u8[3]
-  EXLA.Backend<host:0, 0.1731897335.3414818829.145514>
-  [101, 178, 76]
->
 ```
 
 ## Pixel to complex plan
@@ -268,7 +172,7 @@ This is what the module below does.
 defmodule Pixel do
   import Nx.Defn
 
-  defn project(index, {h,w}, {top_left_x, top_left_y, bottom_right_x,bottom_right_y}) do
+  defn map(index, {h,w}, {top_left_x, top_left_y, bottom_right_x,bottom_right_y}) do
     i = index[0]
     j = index[1]
     scale_x = Nx.divide(bottom_right_x-top_left_x, w-1)
@@ -277,18 +181,8 @@ defmodule Pixel do
       top_left_x + Nx.dot(j,scale_x),
       top_left_y + Nx.dot(i, scale_y)
     )
-    #Nmx.new(
-    #  top_left_x + Nx.dot(j,scale_x),
-    #  top_left_y + Nx.dot(i, scale_y)
-    #)
   end
 end
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-{:module, Pixel, <<70, 79, 82, 49, 0, 0, 12, ...>>, true}
 ```
 
 **Example**: we define a complex plane of interest by two points: the top-left and the bottom-right.
@@ -307,12 +201,6 @@ defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 }
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-%{top_left: -2.0+1.2000000476837158i, bottom_right: 1.0+1.2000000476837158i}
-```
-
 We can map each pixel of an image 100 x 100 (height x width pixels) into the complex plan defined previously.
 
 Below a bunch of points defined by their pixel coordinates (eg 30,60) are mapped into the complex plane
@@ -327,27 +215,18 @@ bottomleft = Nx.tensor([99,0])
 point = Nx.tensor([30,60])
 
 %{
-  topleft: Pixel.project(topleft, dim, defining_points) |> Nx.to_number(),
-  bottomright: Pixel.project(bottomright, dim, defining_points) |> Nx.to_number(),
-  topright: Pixel.project(topright, dim, defining_points) |> Nx.to_number(),
-  bottomleft: Pixel.project(bottomleft, dim, defining_points) |> Nx.to_number(),
-  point: Pixel.project(point, dim, defining_points) |> Nx.to_number()
-}
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-%{
-  topleft: -2.0+1.2000000476837158i,
-  bottomright: 1.0000001192092896-1.2000000476837158i,
-  topright: 1.0000001192092896+1.2000000476837158i,
-  bottomleft: -2.0-1.2000000476837158i,
-  point: -0.1818181276321411+0.47272729873657227i
+  topleft: Pixel.map(topleft, dim, defining_points) |> Nx.to_number(),
+  bottomright: Pixel.map(bottomright, dim, defining_points) |> Nx.to_number(),
+  topright: Pixel.map(topright, dim, defining_points) |> Nx.to_number(),
+  bottomleft: Pixel.map(bottomleft, dim, defining_points) |> Nx.to_number(),
+  point: Pixel.map(point, dim, defining_points) |> Nx.to_number()
 }
 ```
 
 ## Computing the Mandelbrot set
+
+For each pixel, we compute its complex coordinates. We then compute its iteration
+number. With this number, we compute a colour.
 
 **Example**:
 
@@ -356,13 +235,13 @@ dim = {100,100}
 iter_max = 50
 
 p = Nx.tensor([300,400])
-c_i_j = Pixel.project(p,dim, defining_points)
+c_i_j = Pixel.map(p,dim, defining_points)
 n_i_j = Orbit.number(c_i_j, iter_max)
 nm_i_j = Colour.normalize(n_i_j, iter_max)
 {Nx.to_number(n_i_j), Colour.rgb(nm_i_j)} |> dbg()
 
 p = Nx.tensor([55,95])
-c_i_j = Pixel.project(p,dim, defining_points)
+c_i_j = Pixel.map(p,dim, defining_points)
 n_i_j = Orbit.number(c_i_j, iter_max)
 nm_i_j = Colour.normalize(n_i_j, iter_max)
 {Nx.to_number(n_i_j), Colour.rgb(nm_i_j)}
@@ -371,27 +250,15 @@ nm_i_j = Colour.normalize(n_i_j, iter_max)
 
 ```
 
-<!-- livebook:{"output":true} -->
+**The final module**
 
-```
-{0,
- #Nx.Tensor<
-   u8[3]
-   EXLA.Backend<host:0, 0.1731897335.3414818829.145541>
-   [255, 255, 0]
- >}
-```
+We build the cross product of the `(i,j)` to build a tensor representation
+of the indices: each couple `(i,j)` represents the pixel in te image coordinates.
 
-<!-- livebook:{"output":true} -->
+With this, we can stay along the road under the `defn` goodness for the calculations.
 
-```
-{2,
- #Nx.Tensor<
-   u8[3]
-   EXLA.Backend<host:0, 0.1731897335.3414818829.145545>
-   [234, 244, 10]
- >}
-```
+> Note that to pass arguments into a `defn` function that you want to be
+> treated as arguments, you use a keyword list `opts`.
 
 ```elixir
 defmodule Mandelbrot do
@@ -403,13 +270,14 @@ defmodule Mandelbrot do
 
     h = opts[:h]
     w = opts[:w]
-    max_iter = otps[:max_iter]
+    max_iter = opts[:max_iter]
 
+    # build the tensor [[0,0],, ...[0,m], [1,1]...[n,m]]
     iota_rows = Nx.iota({h}, type: :u16) |> Nx.vectorize(:rows)
     iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
     cross_product = Nx.stack([iota_rows, iota_cols])
 
-    Pixel.project(cross_product,{h,w}, defining_points)
+    Pixel.map(cross_product,{h,w}, defining_points)
       |> Orbit.number(max_iter)
       |> Colour.normalize(max_iter)
       |> Colour.rgb()
@@ -421,13 +289,7 @@ end
 
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-{:module, Mandelbrot, <<70, 79, 82, 49, 0, 0, 12, ...>>, true}
-```
-
 ```elixir
-Mandelbrot.compute(h: 300, w: 300, max_iter: 50)
+Mandelbrot.compute(h: 600, w: 600, max_iter: 30)
 |> Kino.Image.new()
 ```
