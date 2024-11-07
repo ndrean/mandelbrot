@@ -5,7 +5,8 @@ Mix.install(
   [
     {:nx, "~> 0.9.1"},
     {:exla, "~> 0.9.1"},
-    {:kino, "~> 0.14.2"}
+    {:kino, "~> 0.14.2"},
+    {:zigler, "~> 0.13.3"},
   ],
   config: [nx: [default_backend: EXLA.Backend]]
 )
@@ -13,60 +14,164 @@ Mix.install(
 Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
-## Numerical Complex interface
+## Introduction
 
-When you use `defn`, all the arguments are treated as _tensors_ .
+> You might need:
+
+```
+mix zig.get
+```
+
+<!-- livebook:{"break_markdown":true} -->
+
+We want to produce an image that represents the beautiful __Mandelbrot set__
+
+Source: <https://en.wikipedia.org/wiki/Mandelbrot_set>
+
+It is surprinsigly simple to do this in a `Livebook` and with `Nx`, the Numercial `Elixir`.
+
+> We also propose to run the equivalent code in `Zig` in  `Livebook` if you want extra speed. This happens thanks to the [Zigler](https://hexdocs.pm/zigler/Zig.html) library. The `Zig` code returns a binary that `Nx` is able to consume and `Kino` to display.
+
+In a "Mandlebrot image", each pixel has a colour repesenting how _fast_ the _underlying point_ _"escapes"_ when calculating its _iterates_ under a certain function.
+
+#### What is an underlying point?
+
+A pixel has some coordinates `[i,j]`. For example, in a 1024 × 768 image (WIDTH x HEIGHT), the row number varies from from 0 to 1023 and column number from 0 to 767.
+
+We transform these couples of integers `(i,j)` into a point in real numbers 2D plane. We "quantitize" the complex plane.
+
+Here, the 2D "real" plan is defined by the upper left corner, say `(-2,1)`, and bottom right corner, say `(1,-1)`.
+
+We "project" the coordinates into a real plane. For example, the pixel `(0,0)` becomes  `(-2,1)` and the pixel  `(999, 1999)` becomes `(1,-1)`.
+
+#### Which function? What is iterating?
+
+We will iterate the function: `f(x) = x*x +c` where `c` is a given number and `x` the variable.
+
+We start with `z0 = f(0) = c`, then `z1 = f(z0) = z0 * z0 + c` then `z2 = f(z1) = z1 * z1 + c` etc...
+
+Let's take an example. The module below calculates the iterations `x(n) = f(x(n-1))` by a simple recursion.
+
+The sets of these iterates of `c` is called its _orbit_ .
+
+```elixir
+defmodule Simple do
+  def p(x,c) do
+    x**2 + c
+  end
+
+  # initial value
+  def iterate(1,c) do
+    c
+  end
+
+  # the n-th step
+  def iterate(n,c) do
+    p(iterate(n-1, c), c)
+  end
+end
+```
+
+We calculate the first elements of its orbit and evaluate how does the point `c=1` behaves. It looks like it will diverge to infinity.
+
+```elixir
+c = 1
+{ c, 
+  Simple.iterate(1,c), 
+  Simple.iterate(2,c), 
+  Simple.iterate(3,c), 
+  Simple.iterate(4,c),
+  Simple.iterate(5,c),
+  Simple.iterate(6,c),
+}
+```
+
+On the other side, the point `c=-1` seems well bahaved: the orbit has only two values, 0 and - 1, and is periodic.
+
+```elixir
+c = -1
+
+{ c, 
+  Simple.iterate(1,c), 
+  Simple.iterate(2,c), 
+  Simple.iterate(3,c), 
+  Simple.iterate(4,c),
+  Simple.iterate(5,c),
+  Simple.iterate(6,c),
+}
+```
+
+In the examples above, we took a simple "real" number.
+
+For the Mandelbrot set, we use the complex repesentation of a point: `(x,y) -> x + y*i` where `i` is the imaginary number (`i * i = -1`).
+
+So, each pixel `(i,j)` is mapped to a complex number `c = projection(i,j)`, and we want to evaluate how do the iterates of `c` behave under the iteration `z(n+1) = z(n)*z(n) + c` with `z0 = c`.
+
+<!-- livebook:{"break_markdown":true} -->
+
+#### Fast? Iteration number?
+
+We are interested by assigning a __iteration number__ to each `c`.
+
+If the orbit of `c` remains bounded, we assign an _iteration number_ of 0.
+
+If it escapes, meaning one iterate has a norm greater than 2, then we calculate the _first index_ such that the iterate norm is greater than 2 (in absolute value as a complex, or its norm as a point).
+
+## Complex calculus interface
+
+We will use two types of functions:
+
+* `Elixir` functions using `def`
+* `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any)
+
+The points of the 2D plane will be represented as complex numbers as the Mandelbrot map works with complex numbers.
+
+The function `z(n+1) = z(n) * z(n) + c` takes a complex number and returns a complex number.
+
+Below is a helper module to work with complex number in numerical Elixir.
+
+> We use numerical functions, declared with `defn`.  All the arguments are treated as _tensors_ .
 
 ```elixir
 defmodule Ncx do
   import Nx.Defn
-  # import Nx.Constants, only: [i: 1]
+  #import Nx.Constants, only: [i: 1]
 
   defn i() do
     Nx.Constants.i()
   end
 
+  # primitive to build a complex scalar tensor
   defn new(x,y) do
     x + i() * y
   end
 
+  # square norm
   defn sq_norm(z) do
     Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
   end
 end
 ```
 
+## Algorithm
+
+Source: <https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set>
+
+Input: image dimensions (eg 1000 x 1500), max iteration (eg 50)
+
+For each pixel:
+
+* compute its "complex coordinates"
+* compute the iteration number
+* compute a colour
+
+Sum-up and draw from the final tensor with `Kino`.
+
 ## Orbit and iteration number
 
-Given a (complex) number $c$, we compute the **orbit** of $c$ under the map $p: z\mapsto z^2+c$.
+The module computes the __iteration number__ for a given input `c`.
 
-Starting with $z_0 = 0$, we have:
-
-$z_1=p(z_0) = c$
-
-$z_2=p(z_1) = c^2+c$
-
-$z_3=p(z_2) = c^4+2c^3+c^2+c$
-
-...
-
-The orbit of $c$ is the set of $(z_n)$. These numbers $z_n$ may be bounded or not (in absolute value).
-
-It turns out that 2 is the upper bound such that $|z_n|$ is bounded. This means whenever some $|z_n|\geq 2$, then $ z_n \to \infty$. In other words, once some $z_n$ is out of the disk of radius 2, it escapes forever.
-
-:exclamation: However this does not mean that every point in this disk has a bounded orbit.
-
-THerefor, we want to compute the index $n$ when the orbit escapes from the disk 2, if any. With this number, we will define a colour which represents how fast (small index) or not this point escapes.
-
-Since the orbit may stay within the disk 2 (ie bounded, when periodic for example), we have to set a _maximum number of iterations_, noted $m$.
-
-Whenever the values $z_n$ are less than 2 whilst $n$ reaches this maximum $m$, we return $0$. These points are said "Mandelbrot stable".
-
-Otherwise, we return the first $n$ such that $|z_n|>2$.
-
-> we change the condition $|z_n|<2$ to the equivalent condition $|z_n|^2<4$ to avoid computing a square root.
-
-The module below does this by defining numerical functions via `defn`.
+It is also using numerical functions via `defn`.
 
 > Note how we loop using the `Nx` versions of `while` and the double condition managed by`Nx.logical_and`, and also the `Nx` version of `cond`. These macros delegate the code to the backend for performance.
 
@@ -78,15 +183,19 @@ defmodule Orbit do
     z*z + c
   end
 
+  defn num(c, _iter) do
+    c
+  end
 
   defn number(c,max_iter) do
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
-    max_iter = if condition < 0.0625 do
-      1
-    else
-      max_iter
-    end
     
+    max_iter = 
+      case Nx.less(condition, 0.0625) do
+        1 -> 1
+        _ -> max_iter
+      end
+
       {_, _, j} =
         while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
             {poly(z,c), c,i-1}
@@ -122,7 +231,7 @@ iter_st = Orbit.number(st, iter_max) #<- this point is stable and the loop reach
 
 ## Colour calculation
 
-To each integer $n$ found above, we want to return a colour $[r,g,b]$.
+Each __iteration number__ is an integer $n$. We want to associate a colour $[r(n),g(n),b(n)]$.
 
 This will help us to visualise which point of the complex plane is stable, and if not how fast it escapes. The colour gives a visual impression of this "escaping speed".
 
@@ -173,13 +282,13 @@ defmodule Pixel do
   import Nx.Defn
 
   defn map(index, {h,w}, {top_left_x, top_left_y, bottom_right_x,bottom_right_y}) do
-    i = index[0]
-    j = index[1]
+
     scale_x = Nx.divide(bottom_right_x-top_left_x, w-1)
     scale_y = Nx.divide(bottom_right_y-top_left_y, h-1)
+    
     Ncx.new(
-      top_left_x + Nx.dot(j,scale_x),
-      top_left_y + Nx.dot(i, scale_y)
+      top_left_x + Nx.dot(index[1],scale_x),
+      top_left_y + Nx.dot(index[0], scale_y)
     )
   end
 end
@@ -190,7 +299,7 @@ end
 ```elixir
 top_left_x = -2
 top_left_y = 1.2
-bottom_right_x = 1
+bottom_right_x = 0.6
 bottom_right_y = -top_left_y
 
 defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
@@ -253,9 +362,11 @@ nm_i_j = Colour.normalize(n_i_j, iter_max)
 **The final module**
 
 We build the cross product of the `(i,j)` to build a tensor representation
-of the indices: each couple `(i,j)` represents the pixel in te image coordinates.
+of the indices: each couple `(i,j)` represents the pixel of the image.
 
-With this, we can stay along the road under the `defn` goodness for the calculations.
+For each point, we compute its iterations number, and then a colour.
+
+We then reassamble the tensor into the desired format for `Kino` to consume it and display.
 
 > Note that to pass arguments into a `defn` function that you want to be
 > treated as arguments, you use a keyword list `opts`.
@@ -265,14 +376,14 @@ defmodule Mandelbrot do
   import Nx.Defn
 
   defn compute(opts) do
-    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 1; bottom_right_y = -top_left_y
+    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -top_left_y;
     defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
     h = opts[:h]
     w = opts[:w]
     max_iter = opts[:max_iter]
 
-    # build the tensor [[0,0],, ...[0,m], [1,1]...[n,m]]
+    # build the tensor [[0,0],, ...[0,m], [1,1]...[n,m]]. Thks to PValente
     iota_rows = Nx.iota({h}, type: :u16) |> Nx.vectorize(:rows)
     iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
     cross_product = Nx.stack([iota_rows, iota_cols])
@@ -289,7 +400,261 @@ end
 
 ```
 
+Depending on your machine, the computation below can be lengthy. On mine, it took 400s to draw 1M pixels (a 1000 x 1000 image).
+If you want to simply evaluate, set `{h,w} = {500,500}`.
+
 ```elixir
-Mandelbrot.compute(h: 600, w: 600, max_iter: 30)
+Mandelbrot.compute(h: 400, w: 400, max_iter: 50)
+|> Kino.Image.new()
+```
+
+## Parallelise it with async_stream
+
+We divide the image in horizontal bands, as much as the number of CPU cores on the machine.
+
+When using `async_stream` in an `ordered: true` fashion, we get parallelism thanks to the BEAM. This decrease the computation time of one magnitude.
+
+> Another possible optimisation is to remark that the image is symmetric. You can compute half of the image (redefine `h` to be `h-rem(h, cpus*2)` but you would need to be able to reverse a tensor.
+
+```elixir
+defmodule StreamMandelbrot do
+  import Nx.Defn
+
+    @doc"""
+    Example: 42 rows, 8 cpus
+    42 rows = 8cpus * 5 + 2
+    We run 8 threads consuming 5 rows each
+    We just ignore the last 2 rows.
+    """
+    def run(%{h: h, w: w} = opts) do
+      cpus = :erlang.system_info(:logical_processors_available)
+      # we eliminate a few rows from the final image, 8 at most.
+      h = h - rem(h,cpus) 
+      rows_per_cpu = div(h, cpus) 
+      
+      Task.async_stream(0..cpus-1, fn cpu_count -> 
+          # we shift the start index by the number of rows already consummed
+          iota_rows = Nx.iota({rows_per_cpu}, type: :u16) |> Nx.add(cpu_count * rows_per_cpu)|> Nx.vectorize(:rows)
+          # full width
+          iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
+          cross_product = Nx.stack([iota_rows, iota_cols])
+          Nx.Defn.jit_apply(fn t -> 
+            compute(t, opts) end, [cross_product])
+          end, 
+          timeout: :infinity, ordered: true
+      )
+      |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
+      |> Nx.stack()
+      |> Nx.reshape({h,w,3})
+  end
+
+  
+
+  defn compute(cross_product, %{h: h, w: w, max_iter: max_iter}) do
+    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -top_left_y
+    defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
+
+    Pixel.map(cross_product,{h,w}, defining_points)
+    |> Orbit.number(max_iter)
+    |> Colour.normalize(max_iter)
+    |> Colour.rgb()
+    |> Nx.devectorize()
+    |> Nx.as_type(:u8)
+  end
+end
+```
+
+When we run the code, we have much faster results. On my machine, it took 44s to draw a  1M pixels image. We get the expect boost in performance.
+
+```elixir
+h= w = 500;
+
+StreamMandelbrot.run( %{h: h, w: w, max_iter: 50})   
+|> Kino.Image.new()
+```
+
+## Run embedded Zig code
+
+If we still need or want extra speed, we can also embed `Zig` code in `Elixir` within a Livebook.
+
+`Zigler` offers a [remarkable documentation](https://hexdocs.pm/zigler/readme.html#installation-elixir).
+
+You may to have `Zig` installed on your machine.
+
+Run:
+
+```
+mix zig.get
+```
+
+In the `Livebook`, we add the dependencies (in the first cell):
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+Mix.install([{:zigler, "~> 0.13.3"},{:zig_get, "~> 0.13.1"},])
+```
+
+With the `Zigler`, we can even inline Zig code.
+
+The code below runs the same algorithm and runs OS threads for concurrency.
+
+```elixir
+defmodule Zigit do
+  use Zig, otp_app: :zigler, 
+    nifs: [..., generate_mandelbrot: [:threaded]],
+    release_mode: :fast
+    
+  ~Z"""
+    const beam = @import("beam");
+    const std = @import("std");
+    const Cx = std.math.Complex(f64);
+
+    const IMAX = 100;
+    const topLeft = Cx{ .re = -2.1, .im = 1.2 };
+    const bottomRight = Cx{ .re = 0.6, .im = -1.2 };
+    const w = bottomRight.re - topLeft.re;
+    const h = bottomRight.im - topLeft.im;
+    
+    const Context = struct {
+        res_x: usize,
+        res_y: usize,
+    };
+    
+    /// nif: generate_mandelbrot/2 Threaded
+    pub fn generate_mandelbrot(res_x: usize, res_y: usize) !beam.term {
+        const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
+        defer beam.allocator.free(pixels);
+    
+        // const res = createUnthreadedSlice(pixels, res_x, res_y);
+        // threaded version
+        const resolution = Context{ .res_x = res_x, .res_y = res_y };
+        const res = try createBands(pixels, resolution);
+        return beam.make(res, .{ .as = .binary });
+        // return beam.make(res, .{});
+    }
+
+    // <--- threaded version
+    fn createBands(pixels: []u8, ctx: Context) ![]u8 {
+        const cpus = try std.Thread.getCpuCount();
+        var threads = try beam.allocator.alloc(std.Thread, cpus);
+        defer beam.allocator.free(threads);
+    
+        // half of the total rows
+        const rows_to_process = ctx.res_y / 2 + ctx.res_y % 2;
+        // one band is one count of cpus
+        // const nb_rows_per_band = rows_to_process / cpus + rows_to_process % cpus;
+        const rows_per_band = (rows_to_process + cpus - 1) / cpus;
+    
+        for (0..cpus) |cpu_count| {
+            const start_row = cpu_count * rows_per_band;
+    
+            // Stop if there are no rows to process
+            if (start_row >= rows_to_process) break;
+    
+            const end_row = @min(start_row + rows_per_band, rows_to_process);
+            const args = .{ ctx, pixels, start_row, end_row };
+            threads[cpu_count] = try std.Thread.spawn(.{}, processRows, args);
+        }
+        for (threads[0..cpus]) |thread| {
+            thread.join();
+        }
+    
+        return pixels;
+    }
+
+    fn processRows(ctx: Context, pixels: []u8, start_row: usize, end_row: usize) void {
+        for (start_row..end_row) |current_row| {
+            processRow(ctx, pixels, current_row);
+        }
+    }
+
+    fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
+        // Calculate the symmetric row
+        const sym_row_id = ctx.res_y - 1 - row_id;
+    
+        if (row_id <= sym_row_id) {
+            // loop over columns
+            for (0..ctx.res_x) |col_id| {
+                const c = mapPixel(.{ @as(usize, @intCast(row_id)), @as(usize, @intCast(col_id)) }, ctx);
+                const iter = iterationNumber(c);
+                const colour = createRgb(iter);
+    
+                const p_idx = (row_id * ctx.res_x + col_id) * 3;
+                pixels[p_idx + 0] = colour[0];
+                pixels[p_idx + 1] = colour[1];
+                pixels[p_idx + 2] = colour[2];
+    
+                // Process the symmetric row (if it's different from current row)
+                if (row_id != sym_row_id) {
+                    const sym_p_idx = (sym_row_id * ctx.res_x + col_id) * 3;
+                    pixels[sym_p_idx + 0] = colour[0];
+                    pixels[sym_p_idx + 1] = colour[1];
+                    pixels[sym_p_idx + 2] = colour[2];
+                }
+            }
+        }
+    }
+
+    fn mapPixel(pixel: [2]usize, ctx: Context) Cx {
+        const px_width = ctx.res_x - 1;
+        const px_height = ctx.res_y - 1;
+        const scale_x = w / @as(f64, @floatFromInt(px_width));
+        const scale_y = h / @as(f64, @floatFromInt(px_height));
+    
+        const re = topLeft.re + scale_x * @as(f64, @floatFromInt(pixel[1]));
+        const im = topLeft.im + scale_y * @as(f64, @floatFromInt(pixel[0]));
+        return Cx{ .re = re, .im = im };
+    }
+
+    fn iterationNumber(c: Cx) ?usize {
+        if (c.re > 0.6 or c.re < -2.1) return null;
+        if (c.im > 1.2 or c.im < -1.2) return null;
+        // first cardiod
+        if ((c.re + 1) * (c.re + 1) + c.im * c.im < 0.0625) return null;
+    
+        var z = Cx{ .re = 0.0, .im = 0.0 };
+    
+        for (0..IMAX) |j| {
+            if (sqnorm(z) > 4) return j;
+            z = Cx.mul(z, z).add(c);
+        }
+        return null;
+    }
+
+    fn sqnorm(z: Cx) f64 {
+        return z.re * z.re + z.im * z.im;
+    }
+    
+    fn createRgb(iter: ?usize) [3]u8 {
+        // If it didn't escape, return black
+        if (iter == null) return [_]u8{ 0, 0, 0 };
+    
+        // Normalize time to [0,1] now that we know it escaped
+        const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(IMAX));
+    
+        if (normalized < 0.5) {
+            const scaled = normalized * 2;
+            return [_]u8{ @as(u8, @intFromFloat(255.0 * (1.0 - scaled))), @as(u8, @intFromFloat(255.0 * (1.0 - scaled / 2))), @as(u8, @intFromFloat(127 + 128 * scaled)) };
+        } else {
+            const scaled = (normalized - 0.5) * 2.0;
+            return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled))), @as(u8, @intFromFloat(128.0 * (1.0 - scaled))) };
+        }
+    }
+
+  """
+end
+```
+
+We run the Zig code. It returns a binary that we are able to consume with `Nx` and display the image.
+
+To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic.
+
+```elixir
+h = w = 1_000
+
+Zigit.generate_mandelbrot(h, w)
+|> Nx.from_binary(:u8)
+|> Nx.reshape({h, w, 3})
 |> Kino.Image.new()
 ```

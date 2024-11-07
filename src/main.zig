@@ -4,10 +4,10 @@ const std = @import("std");
 const Cx = std.math.Complex(f64);
 const zigimg = @import("zigimg");
 
-const print = std.debug.print;
-
 const IMAX: usize = 100;
-const RESOLUTION = [_]u64{ 30_000, 30_000 };
+const RESOLUTION = [_]u64{ 1_000, 1_000 };
+const topLeft = Cx{ .re = -2, .im = 1.2 };
+const bottomRight = Cx{ .re = 0.6, .im = -1.2 };
 
 test "complex" {
     const c1 = Cx.init(1.0, 0.0);
@@ -17,6 +17,15 @@ test "complex" {
     const c4 = Cx.mul(c1, c2);
     try std.testing.expectEqual(c4, c2);
 }
+
+fn Context(comptime T: type) type {
+    return struct {
+        resolution: [2]T,
+        topLeft: Cx,
+        bottomRight: Cx,
+    };
+}
+
 /// Compute the square of the norm of a complex number to avoid the square root
 fn sqnorm(z: Cx) f64 {
     return z.re * z.re + z.im * z.im;
@@ -54,7 +63,7 @@ test "iter when captured" {
     try std.testing.expect(iter == null);
 }
 test "iter if escapes" {
-    const c = Cx{ .re = 1.0, .im = 1.0 };
+    const c = Cx{ .re = 0.5, .im = 0.5 };
     const iter = iterationNumber(c);
     try std.testing.expect(iter != null);
 }
@@ -97,106 +106,93 @@ test "createRgb" {
     try std.testing.expectEqualSlices(u8, &expected3, &result);
 }
 
-const Context = struct {
-    resolution: [2]u64,
-    topLeft: Cx,
-    bottomRight: Cx,
-};
-
-/// Given an image of size img,
+/// Given an image of size [width, height] pixels, and a region of
 /// a complex plane defined by the topLeft and bottomRight,
 /// the pixel coordinate in the output image is translated to a complex number
-///
-/// Example: With an image of size img=100x200, the point/pixel at 75,175,
-/// should map to 0.5 + 0.5i
-fn pixelToComplex(pix: [2]u64, ctx: Context) Cx {
+/// The pixel coordinate is the [row, column] of the image.
+/// It returns the complex number that corresponds to the pixel coordinate.
+/// but rotated.
+fn mapPixel(pixel: [2]u64, ctx: Context(u64)) Cx {
     const w = ctx.bottomRight.re - ctx.topLeft.re;
-    const h = -ctx.topLeft.im + ctx.bottomRight.im;
-    const scale_x = w / @as(f64, @floatFromInt(ctx.resolution[0] - 1));
-    const scale_y = h / @as(f64, @floatFromInt(ctx.resolution[1] - 1));
+    const h = ctx.bottomRight.im - ctx.topLeft.im;
+    const px_width = ctx.resolution[0] - 1;
+    const px_height = ctx.resolution[1] - 1;
+    const scale_x = w / @as(f64, @floatFromInt(px_width));
+    const scale_y = h / @as(f64, @floatFromInt(px_height));
 
-    const re = ctx.topLeft.re + scale_x * @as(f64, @floatFromInt(pix[0]));
-    const im = ctx.topLeft.im + scale_y * @as(f64, @floatFromInt(pix[1]));
+    const re = ctx.topLeft.re + scale_x * @as(f64, @floatFromInt(pixel[1]));
+    const im = ctx.topLeft.im + scale_y * @as(f64, @floatFromInt(pixel[0]));
     return Cx{ .re = re, .im = im };
-
-    // const re = @as(f64, @floatFromInt(pix[0])) / @as(f64, @floatFromInt(ctx.resolution[0])) * w;
-    // const im = @as(f64, @floatFromInt(pix[1])) / @as(f64, @floatFromInt(ctx.resolution[1])) * h;
 }
 
-// test "pixelToComplex" {
-//     const test_cases = [_]struct {
-//         pix: [2]u32,
-//         expected: Cx,
-//     }{
-//         .{ .pix = .{ 0, 0 }, .expected = Cx{ .re = -2, .im = 1.2 } },
-//         .{ .pix = .{ 100, 200 }, .expected = Cx{ .re = 0.8, .im = -1.2 } },
-//         .{ .pix = .{ 50, 100 }, .expected = Cx{ .re = -0.6, .im = 0.0 } },
-//     };
+test "mapPixel" {
+    const test_tl = Cx{ .re = -2.1, .im = 1.2 };
+    const test_br = Cx{ .re = 0.6, .im = -1.2 };
+    const test_resolution = [_]u64{ 200, 100 };
+    const ctx = .{ .resolution = test_resolution, .topLeft = test_tl, .bottomRight = test_br };
 
-//     const ctx = .{ .resolution = RESOLUTION, .topLeft = Cx{ .re = -2, .im = 1.2 }, .bottomRight = Cx{ .re = 0.8, .im = -1.2 } };
+    const test_cases = [_]struct {
+        pixel: [2]u64,
+        expected: Cx,
+    }{
+        .{ .pixel = .{ 0, 0 }, .expected = test_tl },
+        .{ .pixel = .{ 99, 199 }, .expected = test_br },
+        .{ .pixel = .{ 99, 0 }, .expected = Cx{ .re = -2.1, .im = -1.2 } },
+        .{ .pixel = .{ 0, 199 }, .expected = Cx{ .re = 0.6, .im = 1.2 } },
+    };
 
-//     for (test_cases) |tc| {
-//         const result = pixelToComplex(tc.pix, ctx);
-//         try std.testing.expectApproxEqRel(tc.expected.re, result.re, 1e-6);
-//         try std.testing.expectApproxEqRel(tc.expected.im, result.im, 1e-6);
-//     }
-
-//     const topLeft = Cx{ .re = -1, .im = 1 };
-//     const bottomRight = Cx{ .re = 1, .im = -1 };
-//     const ctx = Context{ .resolution = .{ 100, 200 }, .topLeft = topLeft, .bottomRight = bottomRight };
-//     const pix = .{ 75, 150 };
-//     const expected = Cx{ .re = 0.5, .im = -0.5 };
-//     const result = pixelToComplex(pix, ctx);
-//     try std.testing.expect(expected.re == result.re and expected.im == result.im);
-// }
-
-fn createUnthreadedSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
-    var pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
-    const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
-    for (0..rows_to_process) |current_row| {
-        for (0..ctx.resolution[0]) |current_col| {
-            const c = pixelToComplex(.{ @as(u64, @intCast(current_col)), @as(u64, @intCast(current_row)) }, ctx);
-            const iter = iterationNumber(c);
-            const colour = createRgb(iter);
-            const pixel_index = (current_row * ctx.resolution[0] + current_col) * 3;
-            // copy RGB values to consecutive memory locations
-            pixels[pixel_index + 0] = colour[0]; //R
-            pixels[pixel_index + 1] = colour[1]; //G
-            pixels[pixel_index + 2] = colour[2]; //B
-
-            const mirror_y = ctx.resolution[1] - 1 - current_row;
-            if (mirror_y != current_row) {
-                const mirror_pixel_index = (mirror_y * ctx.resolution[0] + current_col) * 3;
-                pixels[mirror_pixel_index + 0] = colour[0]; //R
-                pixels[mirror_pixel_index + 1] = colour[1]; //G
-                pixels[mirror_pixel_index + 2] = colour[2]; //B
-            }
-        }
+    for (test_cases) |tc| {
+        const result = mapPixel(tc.pixel, ctx);
+        try std.testing.expectApproxEqRel(tc.expected.re, result.re, 1e-4);
+        try std.testing.expectApproxEqRel(tc.expected.im, result.im, 1e-4);
     }
+}
+
+fn createBands(ctx: Context(u64), allocator: std.mem.Allocator) ![]u8 {
+    const pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
+    errdefer allocator.free(pixels);
+
+    const cpus = try std.Thread.getCpuCount();
+    var threads = try allocator.alloc(std.Thread, cpus);
+    defer allocator.free(threads);
+
+    // half of the total rows
+    const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
+    // one band is one count of cpus
+    // const nb_rows_per_band = rows_to_process / cpus + rows_to_process % cpus;
+    const rows_per_band = (rows_to_process + cpus - 1) / cpus;
+
+    for (0..cpus) |cpu_count| {
+        const start_row = cpu_count * rows_per_band;
+
+        // Stop if there are no rows to process
+        if (start_row >= rows_to_process) break;
+
+        const end_row = @min(start_row + rows_per_band, rows_to_process);
+        const args = .{ ctx, pixels, start_row, end_row };
+        threads[cpu_count] = try std.Thread.spawn(.{}, processRows, args);
+    }
+    for (threads[0..cpus]) |thread| {
+        thread.join();
+    }
+
     return pixels;
 }
 
-// fn processUnsymmetrizeRow(ctx: Context, pixesl: []u8, y: usize) void {
-//     for (0..ctx.resolution[0]) |x| {
-//         const c = pixelToComplex(.{ @as(u32, @intCast(x)), @as(u32, @intCast(y)) }, ctx);
-//         const iter = getIter(c);
-//         const colour = createRgb(iter);
+fn processRows(ctx: Context(u64), pixels: []u8, start_row: usize, end_row: usize) void {
+    for (start_row..end_row) |current_row| {
+        processRow(ctx, pixels, current_row);
+    }
+}
 
-//         const p_idx = (y * ctx.resolution[0] + x) * 3;
-//         pixesl[p_idx + 0] = colour[0];
-//         pixesl[p_idx + 1] = colour[1];
-//         pixesl[p_idx + 2] = colour[2];
-//     }
-// }
-
-fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
+fn processRow(ctx: Context(u64), pixels: []u8, row_id: usize) void {
     // Calculate the symmetric row
     const sym_row_id = ctx.resolution[1] - 1 - row_id;
 
     if (row_id <= sym_row_id) {
         // loop over columns
-        for (0..ctx.resolution[1]) |col_id| {
-            const c = pixelToComplex(.{ @as(u64, @intCast(col_id)), @as(u64, @intCast(row_id)) }, ctx);
+        for (0..ctx.resolution[0]) |col_id| {
+            const c = mapPixel(.{ @as(u64, @intCast(row_id)), @as(u64, @intCast(col_id)) }, ctx);
             const iter = iterationNumber(c);
             const colour = createRgb(iter);
 
@@ -216,45 +212,6 @@ fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
     }
 }
 
-fn processRows(ctx: Context, pixels: []u8, start_row: usize, end_row: usize) void {
-    for (start_row..end_row) |current_row| {
-        processRow(ctx, pixels, current_row);
-    }
-}
-
-fn createBands(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
-    const pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
-    errdefer allocator.free(pixels);
-
-    const cpus = try std.Thread.getCpuCount();
-    var threads = try allocator.alloc(std.Thread, cpus);
-    defer allocator.free(threads);
-
-    // half of the total rows
-    const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
-    // one band is one count of cpus
-    const nb_rows_per_band = rows_to_process / cpus + rows_to_process % cpus;
-    print("nb_rows_per_band: {}\n", .{nb_rows_per_band});
-
-    for (0..cpus) |cpu_count| {
-        const start_row = cpu_count * nb_rows_per_band;
-        const end_row = start_row + nb_rows_per_band;
-        const args = .{ ctx, pixels, start_row, end_row };
-        threads[cpu_count] = try std.Thread.spawn(.{}, processRows, args);
-    }
-    for (threads[0..cpus]) |thread| {
-        thread.join();
-    }
-
-    return pixels;
-}
-
-//
-
-// test "createSlice" {
-//     _ = try createSlice(.{ 100, 200 }, Cx{ .re = -1, .im = 1 }, Cx{ .re = 1, .im = -1 }, std.testing.allocator);
-// }
-
 fn writeToPNG(path: []const u8, pixels: []u8, resolution: [2]u64, allocator: std.mem.Allocator) !void {
     const w = resolution[0];
     const h = resolution[1];
@@ -269,16 +226,17 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    const t0 = std.time.milliTimestamp();
-    const ctx = .{ .resolution = RESOLUTION, .topLeft = Cx{ .re = -2, .im = 1.2 }, .bottomRight = Cx{ .re = 0.8, .im = -1.2 } };
+    // const t0 = std.time.milliTimestamp();
+
+    const ctx = .{ .resolution = RESOLUTION, .topLeft = topLeft, .bottomRight = bottomRight };
 
     // const pixels = try createPlentyThreadsSlice(ctx, allocator);
     // const pixels = try createUnthreadedSlice(ctx, allocator);
     const pixels = try createBands(ctx, allocator);
     defer allocator.free(pixels);
-    const t1 = std.time.milliTimestamp();
-    print("Writing to PNG after: {}\n", .{t1 - t0});
-    try writeToPNG("mandelbrotband.png", pixels, RESOLUTION, allocator);
+    // const t1 = std.time.milliTimestamp();
+    // print("Writing to PNG after: {}\n", .{t1 - t0});
+    try writeToPNG("images/mandelbrot.png", pixels, RESOLUTION, allocator);
 }
 
 // fn createPlentyThreadsSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
@@ -314,4 +272,43 @@ pub fn main() !void {
 //     }
 
 //     return pixels;
+// }
+
+// fn createUnthreadedSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {
+//     var pixels = try allocator.alloc(u8, ctx.resolution[0] * ctx.resolution[1] * 3);
+//     const rows_to_process = ctx.resolution[1] / 2 + ctx.resolution[1] % 2;
+//     for (0..rows_to_process) |current_row| {
+//         for (0..ctx.resolution[0]) |current_col| {
+//             const c = mapPixel(.{ @as(u64, @intCast(current_col)), @as(u64, @intCast(current_row)) }, ctx);
+//             const iter = iterationNumber(c);
+//             const colour = createRgb(iter);
+//             const pixel_index = (current_row * ctx.resolution[0] + current_col) * 3;
+//             // copy RGB values to consecutive memory locations
+//             pixels[pixel_index + 0] = colour[0]; //R
+//             pixels[pixel_index + 1] = colour[1]; //G
+//             pixels[pixel_index + 2] = colour[2]; //B
+
+//             const mirror_y = ctx.resolution[1] - 1 - current_row;
+//             if (mirror_y != current_row) {
+//                 const mirror_pixel_index = (mirror_y * ctx.resolution[0] + current_col) * 3;
+//                 pixels[mirror_pixel_index + 0] = colour[0]; //R
+//                 pixels[mirror_pixel_index + 1] = colour[1]; //G
+//                 pixels[mirror_pixel_index + 2] = colour[2]; //B
+//             }
+//         }
+//     }
+//     return pixels;
+// }
+
+// fn processUnsymmetrizeRow(ctx: Context, pixesl: []u8, y: usize) void {
+//     for (0..ctx.resolution[0]) |x| {
+//         const c = mapPixel(.{ @as(u32, @intCast(x)), @as(u32, @intCast(y)) }, ctx);
+//         const iter = getIter(c);
+//         const colour = createRgb(iter);
+
+//         const p_idx = (y * ctx.resolution[0] + x) * 3;
+//         pixesl[p_idx + 0] = colour[0];
+//         pixesl[p_idx + 1] = colour[1];
+//         pixesl[p_idx + 2] = colour[2];
+//     }
 // }
