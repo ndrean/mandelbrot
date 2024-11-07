@@ -1,4 +1,4 @@
-# Mandelbrot set with Numerical Elixir
+# Mandelbrot set with Numerical Elixir and Zig
 
 ```elixir
 Mix.install(
