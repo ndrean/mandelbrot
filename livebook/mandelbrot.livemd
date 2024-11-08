@@ -515,7 +515,7 @@ The code below runs the same algorithm and runs OS threads for concurrency.
 defmodule Zigit do
   use Zig, otp_app: :zigler,
     nifs: [..., generate_mandelbrot: [:threaded]]
-    # release_mode: :fast
+    release_mode: :fast
 
   ~Z"""
     const beam = @import("beam");
