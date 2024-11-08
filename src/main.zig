@@ -4,7 +4,7 @@ const std = @import("std");
 const Cx = std.math.Complex(f64);
 const zigimg = @import("zigimg");
 
-const IMAX: usize = 100;
+const IMAX = 100;
 const RESOLUTION = [_]u64{ 1_000, 1_000 };
 const topLeft = Cx{ .re = -2, .im = 1.2 };
 const bottomRight = Cx{ .re = 0.6, .im = -1.2 };
@@ -23,17 +23,25 @@ fn Context(comptime T: type) type {
         resolution: [2]T,
         topLeft: Cx,
         bottomRight: Cx,
+        imax: usize,
     };
 }
 
-/// Compute the square of the norm of a complex number to avoid the square root
-fn sqnorm(z: Cx) f64 {
-    return z.re * z.re + z.im * z.im;
-}
+pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    // const t0 = std.time.milliTimestamp();
 
-test "sqnorm" {
-    const z = Cx{ .re = 2.0, .im = 2.0 };
-    try std.testing.expectApproxEqRel(sqnorm(z), Cx.magnitude(z) * Cx.magnitude(z), 1e-4);
+    const ctx = Context(u64){ .resolution = RESOLUTION, .topLeft = topLeft, .bottomRight = bottomRight, .imax = IMAX };
+
+    // const pixels = try createPlentyThreadsSlice(ctx, allocator);
+    // const pixels = try createUnthreadedSlice(ctx, allocator);
+    const pixels = try createBands(ctx, allocator);
+    defer allocator.free(pixels);
+    // const t1 = std.time.milliTimestamp();
+    // print("Writing to PNG after: {}\n", .{t1 - t0});
+    try writeToPNG("images/mandelbrot.png", pixels, RESOLUTION, allocator);
 }
 
 /// The Mandelbrot set is the set of complex numbers c for which the function `f(z) = z^2 + c` does not escape to infinity.
@@ -42,29 +50,30 @@ test "sqnorm" {
 ///  It escapes when (norm > 4) or when it reaches max_iter.
 ///
 /// Returns the number of iterations when escapes or null if it didn't escape
-fn iterationNumber(c: Cx) ?usize {
-    if (c.re > 0.6 or c.re < -2.1) return null;
-    if (c.im > 1.2 or c.im < -1.2) return null;
+fn iterationNumber(c: Cx, imax: usize) ?usize {
+    if (c.re > 0.6 or c.re < -2.1) return 0;
+    if (c.im > 1.2 or c.im < -1.2) return 0;
+
     // first cardiod
     if ((c.re + 1) * (c.re + 1) + c.im * c.im < 0.0625) return null;
 
     var z = Cx{ .re = 0.0, .im = 0.0 };
 
-    for (0..IMAX) |j| {
+    for (0..imax) |j| {
         if (sqnorm(z) > 4) return j;
         z = Cx.mul(z, z).add(c);
     }
     return null;
 }
 
-test "iter when captured" {
+test "iter null when captured" {
     const c = Cx{ .re = 0.0, .im = 0.0 };
-    const iter = iterationNumber(c);
+    const iter = iterationNumber(c, 30);
     try std.testing.expect(iter == null);
 }
-test "iter if escapes" {
+test "iter not null if escapes" {
     const c = Cx{ .re = 0.5, .im = 0.5 };
-    const iter = iterationNumber(c);
+    const iter = iterationNumber(c, 30);
     try std.testing.expect(iter != null);
 }
 
@@ -73,37 +82,37 @@ test "iter if escapes" {
 /// The colour if black when the point is captured.
 ///
 /// The brighter the color the faster it escapes.
-fn createRgb(iter: ?usize) [3]u8 {
+fn createRgb(iter: ?usize, imax: usize) [3]u8 {
     // If it didn't escape, return black
     if (iter == null) return [_]u8{ 0, 0, 0 };
 
-    // Normalize time to [0,1] now that we know it escaped
-    const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(IMAX));
+    // Normalize time to [0,1] now that we know it isn't NULL
+    const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(imax));
 
     if (normalized < 0.5) {
         const scaled = normalized * 2;
-        return [_]u8{ @as(u8, @intFromFloat(255.0 * (1.0 - scaled))), @as(u8, @intFromFloat(255.0 * (1.0 - scaled / 2))), @as(u8, @intFromFloat(127 + 128 * scaled)) };
+        return [_]u8{ @as(u8, @intFromFloat(255 * (1 - scaled))), @as(u8, @intFromFloat(255 * (1 - scaled / 2))), @as(u8, @intFromFloat(127 + 128 * scaled)) };
     } else {
         const scaled = (normalized - 0.5) * 2.0;
-        return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled))), @as(u8, @intFromFloat(255.0 * (1.0 - scaled))) };
+        return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled / 2))), @as(u8, @intFromFloat(127 * (1 - scaled))) };
     }
 }
 
 test "createRgb" {
-    const iter1 = 0;
-    const expected1 = [_]u8{ 255, 255, 127 };
-    var result = createRgb(iter1);
-    try std.testing.expectEqualSlices(u8, &expected1, &result);
+    const test_cases = [_]struct {
+        iter: ?usize,
+        expected: [3]u8,
+    }{
+        .{ .iter = null, .expected = [_]u8{ 0, 0, 0 } },
+        .{ .iter = 0, .expected = [_]u8{ 255, 255, 127 } },
+        .{ .iter = IMAX / 2, .expected = [_]u8{ 0, 127, 255 } },
+        .{ .iter = IMAX, .expected = [_]u8{ 0, 63, 0 } },
+    };
 
-    const iter2 = IMAX / 2;
-    const expected2 = [_]u8{ 0, 127, 255 };
-    result = createRgb(iter2);
-    try std.testing.expectEqualSlices(u8, &expected2, &result);
-
-    const iter3 = IMAX;
-    const expected3 = [_]u8{ 0, 0, 0 };
-    result = createRgb(iter3);
-    try std.testing.expectEqualSlices(u8, &expected3, &result);
+    for (test_cases) |tc| {
+        const result = createRgb(tc.iter, IMAX);
+        try std.testing.expectEqualSlices(u8, &tc.expected, &result);
+    }
 }
 
 /// Given an image of size [width, height] pixels, and a region of
@@ -129,7 +138,7 @@ test "mapPixel" {
     const test_tl = Cx{ .re = -2.1, .im = 1.2 };
     const test_br = Cx{ .re = 0.6, .im = -1.2 };
     const test_resolution = [_]u64{ 200, 100 };
-    const ctx = .{ .resolution = test_resolution, .topLeft = test_tl, .bottomRight = test_br };
+    const ctx = .{ .resolution = test_resolution, .topLeft = test_tl, .bottomRight = test_br, .imax = 10 };
 
     const test_cases = [_]struct {
         pixel: [2]u64,
@@ -193,8 +202,8 @@ fn processRow(ctx: Context(u64), pixels: []u8, row_id: usize) void {
         // loop over columns
         for (0..ctx.resolution[0]) |col_id| {
             const c = mapPixel(.{ @as(u64, @intCast(row_id)), @as(u64, @intCast(col_id)) }, ctx);
-            const iter = iterationNumber(c);
-            const colour = createRgb(iter);
+            const iter = iterationNumber(c, ctx.imax);
+            const colour = createRgb(iter, ctx.imax);
 
             const p_idx = (row_id * ctx.resolution[0] + col_id) * 3;
             pixels[p_idx + 0] = colour[0];
@@ -222,21 +231,14 @@ fn writeToPNG(path: []const u8, pixels: []u8, resolution: [2]u64, allocator: std
     try image.writeToFilePath(path, .{ .png = .{} });
 }
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-    // const t0 = std.time.milliTimestamp();
+/// Compute the square of the norm of a complex number to avoid the square root
+fn sqnorm(z: Cx) f64 {
+    return z.re * z.re + z.im * z.im;
+}
 
-    const ctx = .{ .resolution = RESOLUTION, .topLeft = topLeft, .bottomRight = bottomRight };
-
-    // const pixels = try createPlentyThreadsSlice(ctx, allocator);
-    // const pixels = try createUnthreadedSlice(ctx, allocator);
-    const pixels = try createBands(ctx, allocator);
-    defer allocator.free(pixels);
-    // const t1 = std.time.milliTimestamp();
-    // print("Writing to PNG after: {}\n", .{t1 - t0});
-    try writeToPNG("images/mandelbrot.png", pixels, RESOLUTION, allocator);
+test "sqnorm" {
+    const z = Cx{ .re = 2.0, .im = 2.0 };
+    try std.testing.expectApproxEqRel(sqnorm(z), Cx.magnitude(z) * Cx.magnitude(z), 1e-4);
 }
 
 // fn createPlentyThreadsSlice(ctx: Context, allocator: std.mem.Allocator) ![]u8 {

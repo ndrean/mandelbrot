@@ -113,7 +113,9 @@ So, each pixel `(i,j)` is mapped to a complex number `c = projection(i,j)`, and 
 
 We are interested by assigning a __iteration number__ to each `c`.
 
-If the orbit of `c` remains bounded, we assign an _iteration number_ of 0.
+The number of iterations that we compute is bounded by a value `max_iter`. We can fix it to say 50.
+
+If the orbit of `c` remains bounded, we assign an _iteration number_ to `max_iter`.
 
 If it escapes, meaning one iterate has a norm greater than 2, then we calculate the _first index_ such that the iterate norm is greater than 2 (in absolute value as a complex, or its norm as a point).
 
@@ -171,6 +173,8 @@ Sum-up and draw from the final tensor with `Kino`.
 
 The module computes the __iteration number__ for a given input `c`.
 
+If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whever it stays bounded or not. If it is bounded, we get `max_iter`, otherwise a lower value.
+
 It is also using numerical functions via `defn`.
 
 > Note how we loop using the `Nx` versions of `while` and the double condition managed by`Nx.logical_and`, and also the `Nx` version of `cond`. These macros delegate the code to the backend for performance.
@@ -183,28 +187,23 @@ defmodule Orbit do
     z*z + c
   end
 
-  defn num(c, _iter) do
-    c
-  end
-
   defn number(c,max_iter) do
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
-    
-    max_iter = 
-      case Nx.less(condition, 0.0625) do
-        1 -> 1
-        _ -> max_iter
-      end
-
-      {_, _, j} =
-        while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
-            {poly(z,c), c,i-1}
-      end
-
-      cond do
-        Nx.equal(j, 1) -> 0
-        true -> max_iter - j
-      end
+    cond do
+      # points in first cardioid are all stable. Save on iterations
+      Nx.less(condition, 0.0625) ->
+        max_iter
+      # these points are unbounded whenever the norm is > 2
+      Nx.greater(Ncx.sq_norm(c), 4) ->
+        max_iter
+      # we have to evaluate each point as it can be or not bounded in the disk 2
+      1 ->
+          {_, _, j} =
+            while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
+                {poly(z,c), c,i-1}
+            end
+          max_iter - j
+    end
   end
 end
 ```
@@ -215,17 +214,20 @@ end
 st = Ncx.new(0.2, 0.2)
 dv1 = Ncx.new(0.4, 0.4)
 dv2 = Ncx.new(0.3, 0.6)
+dv3 = Ncx.new(2,2)
 
 iter_max = 100
 
 iter_dv1 = Orbit.number(dv1, iter_max) #<- we should find 8 iterations before z_n escapes from the disk 2
 iter_dv2 = Orbit.number(dv2, iter_max) #<- we should find 14 iterations before z_n escapes from the disk 2
-iter_st = Orbit.number(st, iter_max) #<- this point is stable and the loop reaches n interations.
+iter_dv3 = Orbit.number(dv3, iter_max)
+iter_st  = Orbit.number(st, iter_max) #<- this point is stable and the loop reaches n interations.
 
 %{
-  "#{Nx.to_number(dv2)}" => iter_dv2 |> Nx.to_number(),
-  "#{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(),
-  "#{Nx.to_number(st)}" => iter_st ,
+  "unstable/2:  #{Nx.to_number(dv2)}" => iter_dv2 |> Nx.to_number(),
+  "unstable/1:  #{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(),
+  "out_of_d2/1: #{Nx.to_number(dv3)}" => iter_dv3 |> Nx.to_number(),
+  "stable:      #{Nx.to_number(st)}" => iter_st |> Nx.to_number(),
 }
 ```
 
@@ -247,7 +249,9 @@ defmodule Colour do
 
   defn rgb(n) do
     cond do
-      Nx.less(n, 5) ->
+      Nx.equal(n, 0) -> 
+        Nx.stack([255, 255, 127]) |> Nx.as_type(:u8)
+      Nx.less(n, 0.5) ->
         scaled = n * 2
         r = 255 * (1 - scaled)
         g = 255 * (1 - scaled / 2)
@@ -255,8 +259,9 @@ defmodule Colour do
         Nx.stack([r, g, b]) |> Nx.as_type(:u8)
       true ->
         scaled = (n - 0.5) * 2;
-        g = 128 * (1 - scaled)
-        b = 128 * (1 + scaled / 2)
+        g = 127 * (1 - scaled / 2)
+        b = 255 * (1 - scaled)
+        
          Nx.stack([0, g, b]) |> Nx.as_type(:u8)
     end
   end
@@ -264,7 +269,7 @@ end
 ```
 
 ```elixir
-n = 100; max_iter = 100
+n = 0; max_iter = 100
 
 Colour.normalize(n, max_iter)  |> Colour.rgb()
 ```
@@ -321,7 +326,7 @@ topleft = Nx.tensor([0,0])
 bottomright = Nx.tensor([99,99])
 topright = Nx.tensor([0,99])
 bottomleft = Nx.tensor([99,0])
-point = Nx.tensor([30,60])
+point = Nx.tensor([40,70])
 
 %{
   topleft: Pixel.map(topleft, dim, defining_points) |> Nx.to_number(),
@@ -343,13 +348,13 @@ number. With this number, we compute a colour.
 dim = {100,100}
 iter_max = 50
 
-p = Nx.tensor([300,400])
+p = Nx.tensor([30,40])
 c_i_j = Pixel.map(p,dim, defining_points)
 n_i_j = Orbit.number(c_i_j, iter_max)
 nm_i_j = Colour.normalize(n_i_j, iter_max)
 {Nx.to_number(n_i_j), Colour.rgb(nm_i_j)} |> dbg()
 
-p = Nx.tensor([55,95])
+p = Nx.tensor([40,70])
 c_i_j = Pixel.map(p,dim, defining_points)
 n_i_j = Orbit.number(c_i_j, iter_max)
 nm_i_j = Colour.normalize(n_i_j, iter_max)
@@ -376,7 +381,7 @@ defmodule Mandelbrot do
   import Nx.Defn
 
   defn compute(opts) do
-    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -top_left_y;
+    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = - 1.2;
     defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
     h = opts[:h]
@@ -401,18 +406,25 @@ end
 ```
 
 Depending on your machine, the computation below can be lengthy. On mine, it took 400s to draw 1M pixels (a 1000 x 1000 image).
-If you want to simply evaluate, set `{h,w} = {500,500}`.
+If you want to simply evaluate, set `h = w = 400`.
 
 ```elixir
-Mandelbrot.compute(h: 400, w: 400, max_iter: 50)
+h = w = 300;
+Mandelbrot.compute(h: h, w: w, max_iter: 50)
 |> Kino.Image.new()
 ```
 
 ## Parallelise it with async_stream
 
+When the resolution of the image increases, it is interesting to parallelize the computations.
+
 We divide the image in horizontal bands, as much as the number of CPU cores on the machine.
 
-When using `async_stream` in an `ordered: true` fashion, we get parallelism thanks to the BEAM. This decrease the computation time of one magnitude.
+We use `async_stream` to parallelize the computations on the cores of the machine. This is natively implemented in the BEAM, the VM that runs this code.
+
+> This is worth only if the size of the image is large enough as this comes with non negligeable overhead.
+
+We also set `ordered: true` as we need to sum-up the results in an ordered manner.
 
 > Another possible optimisation is to remark that the image is symmetric. You can compute half of the image (redefine `h` to be `h-rem(h, cpus*2)` but you would need to be able to reverse a tensor.
 
@@ -451,7 +463,7 @@ defmodule StreamMandelbrot do
   
 
   defn compute(cross_product, %{h: h, w: w, max_iter: max_iter}) do
-    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -top_left_y
+    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -1.2;
     defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
     Pixel.map(cross_product,{h,w}, defining_points)
@@ -464,10 +476,10 @@ defmodule StreamMandelbrot do
 end
 ```
 
-When we run the code, we have much faster results. On my machine, it took 44s to draw a  1M pixels image. We get the expect boost in performance.
+When we run the code, we have much faster results. On my machine, it took 44s to draw a  1M pixels image. We get the expected performance boost.
 
 ```elixir
-h= w = 500;
+h= w = 400;
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 50})   
 |> Kino.Image.new()
@@ -502,36 +514,30 @@ The code below runs the same algorithm and runs OS threads for concurrency.
 ```elixir
 defmodule Zigit do
   use Zig, otp_app: :zigler, 
-    nifs: [..., generate_mandelbrot: [:threaded]],
-    release_mode: :fast
+    nifs: [..., generate_mandelbrot: [:threaded]]
+    # release_mode: :fast
     
   ~Z"""
     const beam = @import("beam");
     const std = @import("std");
     const Cx = std.math.Complex(f64);
 
-    const IMAX = 100;
     const topLeft = Cx{ .re = -2.1, .im = 1.2 };
     const bottomRight = Cx{ .re = 0.6, .im = -1.2 };
     const w = bottomRight.re - topLeft.re;
     const h = bottomRight.im - topLeft.im;
     
-    const Context = struct {
-        res_x: usize,
-        res_y: usize,
-    };
+    const Context = struct {res_x: usize, res_y: usize, imax: usize};
     
-    /// nif: generate_mandelbrot/2 Threaded
-    pub fn generate_mandelbrot(res_x: usize, res_y: usize) !beam.term {
+    /// nif: generate_mandelbrot/3 Threaded
+    pub fn generate_mandelbrot(res_x: usize, res_y: usize, max_iter: usize) !beam.term {
         const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
         defer beam.allocator.free(pixels);
     
-        // const res = createUnthreadedSlice(pixels, res_x, res_y);
-        // threaded version
-        const resolution = Context{ .res_x = res_x, .res_y = res_y };
+        const resolution = Context{ .res_x = res_x, .res_y = res_y, .imax = max_iter };
+
         const res = try createBands(pixels, resolution);
         return beam.make(res, .{ .as = .binary });
-        // return beam.make(res, .{});
     }
 
     // <--- threaded version
@@ -577,8 +583,8 @@ defmodule Zigit do
             // loop over columns
             for (0..ctx.res_x) |col_id| {
                 const c = mapPixel(.{ @as(usize, @intCast(row_id)), @as(usize, @intCast(col_id)) }, ctx);
-                const iter = iterationNumber(c);
-                const colour = createRgb(iter);
+                const iter = iterationNumber(c, ctx.imax);
+                const colour = createRgb(iter, ctx.imax);
     
                 const p_idx = (row_id * ctx.res_x + col_id) * 3;
                 pixels[p_idx + 0] = colour[0];
@@ -607,15 +613,15 @@ defmodule Zigit do
         return Cx{ .re = re, .im = im };
     }
 
-    fn iterationNumber(c: Cx) ?usize {
-        if (c.re > 0.6 or c.re < -2.1) return null;
-        if (c.im > 1.2 or c.im < -1.2) return null;
+    fn iterationNumber(c: Cx, imax: usize) ?usize {
+        if (c.re > 0.6 or c.re < -2.1) return 0;
+        if (c.im > 1.2 or c.im < -1.2) return 0;
+  
         // first cardiod
         if ((c.re + 1) * (c.re + 1) + c.im * c.im < 0.0625) return null;
     
         var z = Cx{ .re = 0.0, .im = 0.0 };
-    
-        for (0..IMAX) |j| {
+        for (0..imax) |j| {
             if (sqnorm(z) > 4) return j;
             z = Cx.mul(z, z).add(c);
         }
@@ -626,19 +632,19 @@ defmodule Zigit do
         return z.re * z.re + z.im * z.im;
     }
     
-    fn createRgb(iter: ?usize) [3]u8 {
+    fn createRgb(iter: ?usize, imax: usize) [3]u8 {
         // If it didn't escape, return black
         if (iter == null) return [_]u8{ 0, 0, 0 };
     
-        // Normalize time to [0,1] now that we know it escaped
-        const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(IMAX));
+        // Normalize time to [0,1[ now that we know it isn't "null"
+        const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(imax));
     
         if (normalized < 0.5) {
             const scaled = normalized * 2;
-            return [_]u8{ @as(u8, @intFromFloat(255.0 * (1.0 - scaled))), @as(u8, @intFromFloat(255.0 * (1.0 - scaled / 2))), @as(u8, @intFromFloat(127 + 128 * scaled)) };
+            return [_]u8{ @as(u8, @intFromFloat(255 * (1 - scaled))), @as(u8, @intFromFloat(255.0 * (1 - scaled / 2))), @as(u8, @intFromFloat(127 + 128 * scaled)) };
         } else {
             const scaled = (normalized - 0.5) * 2.0;
-            return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled))), @as(u8, @intFromFloat(128.0 * (1.0 - scaled))) };
+            return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled / 2))), @as(u8, @intFromFloat(255 * (1 - scaled))) };
         }
     }
 
@@ -652,8 +658,9 @@ To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic.
 
 ```elixir
 h = w = 1_000
+max_iter = 100;
 
-Zigit.generate_mandelbrot(h, w)
+Zigit.generate_mandelbrot(h, w, max_iter)
 |> Nx.from_binary(:u8)
 |> Nx.reshape({h, w, 3})
 |> Kino.Image.new()

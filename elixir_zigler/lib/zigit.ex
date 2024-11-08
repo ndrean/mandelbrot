@@ -8,10 +8,10 @@ defmodule Zigit do
 
   def draw do
     t = :os.system_time(:microsecond)
-    res_x = 1_000
-    res_y = 1_000
-
-    img = generate_mandelbrot(res_x, res_y)
+    res_x = 5_000
+    res_y = 5_000
+    max_iter = 50
+    img = generate_mandelbrot(res_x, res_y, max_iter)
     IO.puts(byte_size(img))
     IO.puts(:os.system_time(:microsecond) - t)
     {:ok, vimg} = Vix.Vips.Image.new_from_binary(img, res_x, res_y, 3, :VIPS_FORMAT_UCHAR)

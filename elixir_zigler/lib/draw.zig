@@ -4,25 +4,21 @@ const Cx = std.math.Complex(f64);
 
 const print = std.debug.print;
 
-const IMAX = 100;
 const topLeft = Cx{ .re = -2.1, .im = 1.2 };
 const bottomRight = Cx{ .re = 0.6, .im = -1.2 };
 const w = bottomRight.re - topLeft.re;
 const h = bottomRight.im - topLeft.im;
 
-const Context = struct {
-    res_x: usize,
-    res_y: usize,
-};
+const Context = struct { res_x: usize, res_y: usize, imax: usize };
 
-/// nif: generate_mandelbrot/2 Threaded
-pub fn generate_mandelbrot(res_x: usize, res_y: usize) !beam.term {
+/// nif: generate_mandelbrot/3 Threaded
+pub fn generate_mandelbrot(res_x: usize, res_y: usize, imax: usize) !beam.term {
     const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
     defer beam.allocator.free(pixels);
 
     // const res = createUnthreadedSlice(pixels, res_x, res_y);
     // threaded version
-    const resolution = Context{ .res_x = res_x, .res_y = res_y };
+    const resolution = Context{ .res_x = res_x, .res_y = res_y, .imax = imax };
     const res = try createBands(pixels, resolution);
     return beam.make(res, .{ .as = .binary });
     // return beam.make(res, .{});
@@ -71,8 +67,8 @@ fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
         // loop over columns
         for (0..ctx.res_x) |col_id| {
             const c = mapPixel(.{ @as(usize, @intCast(row_id)), @as(usize, @intCast(col_id)) }, ctx);
-            const iter = iterationNumber(c);
-            const colour = createRgb(iter);
+            const iter = iterationNumber(c, ctx.imax);
+            const colour = createRgb(iter, ctx.imax);
 
             const p_idx = (row_id * ctx.res_x + col_id) * 3;
             pixels[p_idx + 0] = colour[0];
@@ -101,7 +97,7 @@ fn mapPixel(pixel: [2]usize, ctx: Context) Cx {
     return Cx{ .re = re, .im = im };
 }
 
-fn iterationNumber(c: Cx) ?usize {
+fn iterationNumber(c: Cx, imax: usize) ?usize {
     if (c.re > 0.6 or c.re < -2.1) return null;
     if (c.im > 1.2 or c.im < -1.2) return null;
     // first cardiod
@@ -109,7 +105,7 @@ fn iterationNumber(c: Cx) ?usize {
 
     var z = Cx{ .re = 0.0, .im = 0.0 };
 
-    for (0..IMAX) |j| {
+    for (0..imax) |j| {
         if (sqnorm(z) > 4) return j;
         z = Cx.mul(z, z).add(c);
     }
@@ -120,12 +116,12 @@ fn sqnorm(z: Cx) f64 {
     return z.re * z.re + z.im * z.im;
 }
 
-fn createRgb(iter: ?usize) [3]u8 {
+fn createRgb(iter: ?usize, imax: usize) [3]u8 {
     // If it didn't escape, return black
     if (iter == null) return [_]u8{ 0, 0, 0 };
 
     // Normalize time to [0,1] now that we know it escaped
-    const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(IMAX));
+    const normalized = @as(f64, @floatFromInt(iter.?)) / @as(f64, @floatFromInt(imax));
 
     if (normalized < 0.5) {
         const scaled = normalized * 2;
