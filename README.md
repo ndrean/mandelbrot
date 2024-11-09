@@ -53,6 +53,7 @@ Mix.install(
   ],
   config: [nx: [default_backend: EXLA.Backend]]
 )
+Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
 ## Nx computations
