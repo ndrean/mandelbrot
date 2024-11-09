@@ -85,7 +85,7 @@ VegaLite.new(width: 600, height: 600)
 |> VegaLite.layers([
   VegaLite.new()
   |> VegaLite.data_from_values(data, only: ["x", "y"])
-  |> VegaLite.mark(:point)
+  |> VegaLite.mark(:point, color: "blue")
   |> VegaLite.encode_field(:x, "x", type: :quantitative)
   |> VegaLite.encode_field(:y, "y", type: :quantitative),
   VegaLite.new()
@@ -116,7 +116,7 @@ VegaLite.new(width: 600, height: 600)
   |> VegaLite.encode_field(:y, "y", type: :quantitative),
   VegaLite.new()
   |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "blue")
+  |> VegaLite.mark(:point, color: "red")
   |> VegaLite.encode_field(:x, "x", type: :quantitative)
   |> VegaLite.encode_field(:y, "y", type: :quantitative),
 ])
