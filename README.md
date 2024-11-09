@@ -29,7 +29,7 @@ This repo contains a pur `Zig` computation and a pur `Elixir` one using Numerica
 
 We firstly evaluated in a Livebook how stable the orbits are for some points.
 
-For example, for $c=1$, we have the orbit $O_1 = \{ 0, 1, 2, 5, 26,\dots\}$ but for $c=-1$, we have a cyclic orbit, $O_{-1} = \{−1, 0, −1, 0,\dots\}$.
+For example, for `c=1`, we have the orbit `O_1 = { 0, 1, 2, 5, 26,...}` but for `c=-1`, we have a cyclic orbit, `O_{-1} = {−1, 0, −1, 0,...}`.
 
 <details><summary>Quick computation of orbits in Elixir</summary>
 
