@@ -1,3 +1,5 @@
+# Mandelbrot set with Elixir and Zig
+
 ```elixir
 Mix.install(
   [
