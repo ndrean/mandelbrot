@@ -26,3 +26,4 @@ test_zigler-*.tar
 /tmp/
 /test/
 /priv/
+.DS_Store

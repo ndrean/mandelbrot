@@ -89,9 +89,9 @@ We are interested by assigning a **iteration number** to each `c`.
 
 The number of iterations that we compute is bounded by a value `max_iter`. We can fix it to say 50.
 
-If the orbit of `c` remains bounded, we assign an _iteration number_ to `max_iter`.
+- If the orbit of `c` remains bounded, `|c|<2`, we assign the _iteration number_ to be `max_iter`.
 
-If it escapes, meaning one iterate has a norm greater than 2, then we calculate the _first index_ such that the iterate norm is greater than 2 (in absolute value as a complex, or its norm as a point).
+- If it escapes, meaning one iterate has a norm greater than 2, then we calculate the _first index_ such that the iterate norm is greater than 2 (in absolute value as a complex, or its norm as a point).
 
 ## Complex calculus interface
 
@@ -428,12 +428,6 @@ If we still need or want extra speed, we can also embed `Zig` code in `Elixir` w
 
 You may to have `Zig` installed on your machine.
 
-Run:
-
-```
-mix zig.get
-```
-
 In the `Livebook`, we add the dependencies (in the first cell):
 
 <!-- livebook:{"force_markdown":true} -->
@@ -585,4 +579,18 @@ defmodule Zigit do
 
   """
 end
+```
+
+The Zig code returns a binary that we are able to consume with Nx and display the image.
+
+To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic.
+
+```elixir
+h = w = 1_000
+max_iter = 100;
+
+Zigit.generate_mandelbrot(h, w, max_iter)
+|> Nx.from_binary(:u8)
+|> Nx.reshape({h, w, 3})
+|> Kino.Image.new()
 ```

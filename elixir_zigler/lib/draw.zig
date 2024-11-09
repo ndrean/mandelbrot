@@ -16,12 +16,10 @@ pub fn generate_mandelbrot(res_x: usize, res_y: usize, imax: usize) !beam.term {
     const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
     defer beam.allocator.free(pixels);
 
-    // const res = createUnthreadedSlice(pixels, res_x, res_y);
     // threaded version
     const resolution = Context{ .res_x = res_x, .res_y = res_y, .imax = imax };
     const res = try createBands(pixels, resolution);
     return beam.make(res, .{ .as = .binary });
-    // return beam.make(res, .{});
 }
 
 // <--- threaded version

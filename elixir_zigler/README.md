@@ -1,21 +1,9 @@
 # TestZigler
 
-**TODO: Add description**
+This is a helper module to test the `Zig` code that is run by Elixir.
 
-## Installation
+It builds a Mandelbrot image and saves it as a .png file.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `test_zigler` to your list of dependencies in `mix.exs`:
+Once we are happy, we can integrate the Zig conde into a Livebook.
 
-```elixir
-def deps do
-  [
-    {:test_zigler, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/test_zigler>.
-
+In the Livebook, the image will be displayed in a cell.

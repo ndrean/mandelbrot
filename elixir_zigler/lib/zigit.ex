@@ -14,7 +14,6 @@ defmodule Zigit do
     IO.puts(byte_size(img))
     IO.puts(:os.system_time(:microsecond) - t)
     {:ok, vimg} = Vix.Vips.Image.new_from_binary(img, res_x, res_y, 3, :VIPS_FORMAT_UCHAR)
-    Vix.Vips.Operation.pngsave(vimg, "priv/zigex.png", compression: 2)
-    # Vix.Vips.Image.write_to_file(vimg, "priv/zigex.jpg[Q=90]")
+    Vix.Vips.Operation.pngsave(vimg, "priv/zigex.png", compression: 9)
   end
 end

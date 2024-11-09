@@ -9,6 +9,8 @@ ex_mandelbrot/deps/
 ex_mandelbrot/test/
 react-color-testing/node_modules/
 zigimg
+.DS_Store
+/images/*
 
 
 
