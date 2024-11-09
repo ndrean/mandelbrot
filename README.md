@@ -9,6 +9,10 @@ Source:
 
 <img width="613" alt="Screenshot 2024-11-05 at 19 35 32" src="https://github.com/user-attachments/assets/9eb71bec-b77e-4d04-bc88-bb86d19d6219">
 
+This can be run in a Livebook.
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
+
 Given a complex number `c` and the polynomial `p_c(x)=x^2+c`, we compute the sequence of iterates:
 
 ```
