@@ -31,62 +31,135 @@ We firstly evaluated in a Livebook how stable the orbits are for some points.
 
 For example, for `c=1`, we have the orbit `O_1 = { 0, 1, 2, 5, 26,...}` but for `c=-1`, we have a cyclic orbit, `O_{-1} = {−1, 0, −1, 0,...}`.
 
-<details><summary>Quick computation of orbits in Elixir</summary>
+<details><summary>Code for visualizing orbits in Elixir</summary>
+# Mandelbrot orbits
 
 ```elixir
 Mix.install(
   [
+    {:nx, "~> 0.9.1"},
+    {:exla, "~> 0.9.1"},
     {:kino_vega_lite, "~> 0.1.11"},
     {:complex, "~> 0.5.0"}
-  ]
+  ],
+  config: [nx: [default_backend: EXLA.Backend]]
 )
+```
 
-defmodule Mandelbrot do
-  def p(z,c) do
-    Complex.multiply(z,z) |> Complex.add(c)
-  end
+## Nx computations
 
-  def orb(1,c), do: c
-  def orb(n,c) do
-    Enum.reduce_while(1..n, [c], fn i, acc ->
-      case acc do
-       [c] ->
-          %{re: re, im: im} = c
-          if re*re+im*im  > 4 do
-            {:halt, {i,acc}}
-          else
-            {:cont,[p(c,c) | acc]}
-          end
-        [t |_ ] = acc ->
-          %{re: re, im: im} = t
-          cond do
-            re*re+im*im  > 10 ->
-              IO.puts "escapes"
-              {:halt, {i, acc}}
-            i == n-1 ->
-              IO.puts "stable until"
-              {:halt, {i, acc}}
-            true ->
-              {:cont, [p(t,c) | acc]}
-          end
-      end
-    end)
-  end
+```elixir
+defmodule Ncx do
+  import Nx.Defn
+
+  defn i(), do: Nx.Constants.i()
+  # primitive to build a complex scalar tensor
+  defn new(x,y), do: x + i() * y
+  # square norm
+  defn sq_norm(z), do: Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
 end
+```
 
-defmodule Chart do
-  def data(n,c) do
-    {nb, points} = Mand.orb(n,c)
-     points =  Enum.map(points, fn %{re: re, im: im} -> [re,im] end)
+## Orbit number
 
-    # you can't plot more points than you have
-    n = if nb<n, do: nb, else: n
+```elixir
+defmodule Orbit do
+  import Nx.Defn
 
-    for i <- 0..n-1 do
-        %{"x" => Enum.at(Enum.at(points, i), 0), "y" => Enum.at(Enum.at(points, i), 1)}
+  defn p(z,c), do: z*z + c
+  
+  defn calc(c, opts) do
+    n = opts[:n]
+
+    while { i=1, _nb=0, t=Nx.broadcast(c,{n}),c }, Nx.less(i,n) do
+      cond do
+        Nx.greater(Ncx.sq_norm(t[i-1]), 4) ->
+          {n, i-1, t, c}
+        true ->
+        { i + 1, i, Nx.indexed_put(t, Nx.stack([i]), p(t[i-1], c)),c }
+      end
     end
   end
 end
+
+
+
+```
+
+## Plotting orbits
+
+```elixir
+defmodule Plot do
+  def new(cx,cy, imax) do
+    c = Ncx.new(cx,cy)
+    {_, nb, t, _} = Orbit.calc(c, n: imax)   
+
+    {data_x,data_y} = Nx.slice(t, [0], [Nx.to_number(nb)])
+    |> Nx.to_list()
+    |> Enum.map(fn z -> {Complex.real(z), Complex.imag(z)} end)
+    |> Enum.unzip()
+
+    {nb, %{x: data_x, y: data_y}, %{x: [cx], y: [cy]}}
+  end
+end
+
+```
+
+## Unstable point
+
+```elixir
+# Unstable point
+cx = 0.35; 
+cy = 0.38
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is unstable. It escapes after #{Nx.to_number(nb)} iterations"
+```
+
+```elixir
+VegaLite.new(width: 600, height: 600)
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.data_from_values(data, only: ["x", "y"])
+  |> VegaLite.mark(:point)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, tooltip: true, color: "red")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative)
+])
+```
+
+## Example Stable point
+
+```elixir
+cx = 0.3; 
+cy = 0.3
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is stable. It says bounded after #{Nx.to_number(nb)} iterations"
+```
+
+```elixir
+VegaLite.new(width: 600, height: 600)
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.data_from_values(data, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "green")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "blue")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+])
+
+
+```
+
 ```
 
 </details>
