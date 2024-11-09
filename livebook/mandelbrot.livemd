@@ -185,10 +185,6 @@ This module transforms a couple `(i,j)` into a complex number. It is a numerical
 
 > a tensor can be of type complex `c64`. A numerical `Nx` function natively understands complex numbers.
 
-There is a Livebook to visualise orbits of points:
-
-[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)
-
 ```elixir
 defmodule Pixel do
   import Nx.Defn
