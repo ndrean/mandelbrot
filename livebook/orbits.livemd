@@ -77,7 +77,7 @@ cx = 0.35;
 cy = 0.38
 
 {nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is unstable. It escapes after #{Nx.to_number(nb)} iterations"
+"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
 ```
 
 ```elixir
@@ -121,4 +121,32 @@ VegaLite.new(width: 600, height: 600)
   |> VegaLite.encode_field(:y, "y", type: :quantitative),
 ])
 
+```
+
+```elixir
+cx = 0.19345; 
+cy = 0.13245
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
+```
+
+## Other stable example
+
+```elixir
+VegaLite.new(width: 600, height: 600)
+|> VegaLite.layers([
+  VegaLite.new()
+  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data, only: ["x", "y"] )
+  |> VegaLite.mark(:point, color: "green")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
+  VegaLite.new()
+  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "red")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
+])
 ```
