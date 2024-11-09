@@ -32,6 +32,7 @@ We firstly evaluated in a Livebook how stable the orbits are for some points.
 For example, for `c=1`, we have the orbit `O_1 = { 0, 1, 2, 5, 26,...}` but for `c=-1`, we have a cyclic orbit, `O_{-1} = {−1, 0, −1, 0,...}`.
 
 <details><summary>Code for visualizing orbits in Elixir</summary>
+  
 # Mandelbrot orbits
 
 ```elixir
@@ -160,10 +161,17 @@ VegaLite.new(width: 600, height: 600)
 
 ```
 
-```
-
 </details>
 <br/>
+
+This code helps to visualize the orbit for the stable point (0.3, 0.3)
+
+![image](https://github.com/user-attachments/assets/baca9f97-e9d2-4bb0-8ad3-3153504a7944)
+
+The orbit of the  unstable point (0.35, 0.38) which escapes after 49 iterations.
+
+![image](https://github.com/user-attachments/assets/56403cd1-870a-4d3c-8ad3-33527eb04650)
+
 
 ## The algorithm
 
