@@ -25,6 +25,8 @@ We want to produce an image that represents the beautiful **Mandelbrot set**
 
 Source: <https://en.wikipedia.org/wiki/Mandelbrot_set>
 
+<https://www.math.univ-toulouse.fr/~cheritat/wiki-draw/index.php/Mandelbrot_set>
+
 We use the `Nx` library with the `EXLA` backend to speed up the computations.
 
 We also propose to run the equivalent code in `Zig` in this `Livebook` if you want extra speed. This happens thanks to the [Zigler](https://hexdocs.pm/zigler/Zig.html) library. The `Zig` code returns a binary that `Nx` is able to consume and `Kino` to display.
@@ -135,8 +137,8 @@ Livebook to compute orbits:
 
 We will use two types of functions:
 
-- `Elixir` functions using `def`
-- `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any)
+* `Elixir` functions using `def`
+* `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any)
 
 The points of the 2D plane will be represented as complex numbers as the Mandelbrot map works with complex numbers.
 
@@ -148,19 +150,13 @@ Below is a helper module to work with complex number in numerical Elixir. It is 
 defmodule Ncx do
   import Nx.Defn
 
-  defn i() do
-    Nx.Constants.i()
-  end
+  defn i(), do: Nx.Constants.i()
 
   # primitive to build a complex scalar tensor
-  defn new(x,y) do
-    x + i() * y
-  end
+  defn new(x,y), do: x + i() * y
 
   # square norm
-  defn sq_norm(z) do
-    Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
-  end
+  defn sq_norm(z), do: Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
 end
 ```
 
@@ -172,10 +168,10 @@ Source: <https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_se
 
 Iterate over each pixel `(i,j)`:
 
-- map it into the 2D plane: compute its "complex coordinates"
-- compute the iteration number
-- compute a colour
-- Sum-up and draw from the final tensor with `Kino`.
+* map it into the 2D plane: compute its "complex coordinates"
+* compute the iteration number
+* compute a colour
+* Sum-up and draw from the final tensor with `Kino`.
 
 An example of a zoom into an area. You can go as deep as you want with these fractals objects.
 
@@ -210,9 +206,9 @@ This module computes the **iteration number** for a given input `c`. It is a num
 
 How does this work?
 
-- If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
+* If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
 
-- If it is bounded, we get `max_iter`, otherwise a lower value.
+* If it is bounded, we get `max_iter`, otherwise a lower value.
 
 We cannot use the recursion form we did earlier because numerical functions don't accept several headers as plain Elixir.
 Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond`, and also the double condition managed by `Nx.logical_and`. In this context, `true` is the tensor `1`.
@@ -221,9 +217,7 @@ Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond
 defmodule Orbit do
   import Nx.Defn
 
-  defn poly(z,c) do
-    z*z + c
-  end
+  defn poly(z,c), do: z*z + c
 
   defn number(c,max_iter) do
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
@@ -238,18 +232,19 @@ defmodule Orbit do
       1 ->
           {_, _, j} =
             while {z=c, c, i=max_iter}, Nx.logical_and(Nx.greater(i,1), Nx.less(Ncx.sq_norm(z), 4)) do
-                {poly(z,c), c,i-1}
+                {poly(z,c), c, i-1}
             end
-          max_iter - j
+          max_iter - j + 1
+      end
     end
-  end
 end
+
 ```
 
 **Examples**:
 
 ```elixir
-st = Ncx.new(0.2, 0.2)
+st  = Ncx.new(0.2, 0.2)
 dv1 = Ncx.new(0.4, 0.4)
 dv2 = Ncx.new(0.3, 0.6)
 dv3 = Ncx.new(2,2)
@@ -269,35 +264,23 @@ iter_st  = Orbit.number(st, iter_max) #<- this point is stable and the loop reac
 }
 ```
 
-```elixir
-%{
-  "out_of_disk2:  2.0+2.0i" => 0,
-  "stable:        0.20000000298023224+0.20000000298023224i" => 99,
-  "unstable/1:    0.4000000059604645+0.4000000059604645i" => 8,
-  "unstable/2:    0.30000001192092896+0.6000000238418579i" => 14
-}
-```
-
-## A Colour palette
+## Some colour palettes
 
 Each **iteration number** is an integer `n`. We want to associate a colour [r(n),g(n),b(n)].
 
 This will help us to visualise which point of the complex plane is stable, and if not how fast it escapes.
 
-The choice below is just an example. Other choices can be made.
+The choice below is just an example. The first render uses the `rbg` function whilst the second the `rgb2`. Other choices can be made.
 
 ```elixir
 defmodule Colour do
   import Nx.Defn
 
-  defn normalize(n, max_iter) do
-    n / max_iter
-  end
-
-  defn rgb(n) do
+  defn rgb(n, max_iter) do
+    n = n / max_iter
     cond do
       Nx.equal(n, 0) ->
-        Nx.stack([255, 255, 128]) |> Nx.as_type(:u8)
+        Nx.stack([255, 255, 0]) |> Nx.as_type(:u8)
       Nx.less(n, 0.5) ->
         s = n * 2
         r = 255 * (1 - s)
@@ -307,9 +290,42 @@ defmodule Colour do
       true ->
         s = 2 * n - 1
         r = 0
-        g = 127 * (1 - s/2)
+        g = 127 * (1 - s)
         b = 255 * (1 - s)
          Nx.stack([r, g, b]) |> Nx.as_type(:u8)
+    end
+  end
+
+  defn map(n, max_iter) do
+    t1 = n  / max_iter
+    t16 = t1 * 16
+    tf = Nx.floor(t16)
+    tmod = t16 - tf
+    t1616 = tmod * 16
+    Nx.floor(t1616)
+  end
+
+  defn rgb2(n, max_iter) do
+    v = map(n, max_iter)
+    cond do
+      Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
+      Nx.equal(v,0) -> Nx.stack([66, 30, 15]) |> Nx.as_type(:u8)
+      Nx.equal(v,1) -> Nx.stack([25, 7, 26]) |> Nx.as_type(:u8)
+      Nx.equal(v,2) -> Nx.stack([9, 1, 47]) |> Nx.as_type(:u8)
+      Nx.equal(v,3) -> Nx.stack([4, 4, 73]) |> Nx.as_type(:u8)
+      Nx.equal(v,4) -> Nx.stack([0, 7, 100]) |> Nx.as_type(:u8)
+      Nx.equal(v,5) -> Nx.stack([12, 44, 138]) |> Nx.as_type(:u8)
+      Nx.equal(v,6) -> Nx.stack([24, 82, 177]) |> Nx.as_type(:u8)
+      Nx.equal(v,7) -> Nx.stack([57, 125, 209]) |> Nx.as_type(:u8)
+      Nx.equal(v,8) -> Nx.stack([134, 181, 229]) |> Nx.as_type(:u8)
+      Nx.equal(v,9) -> Nx.stack([211, 236, 248]) |> Nx.as_type(:u8)
+      Nx.equal(v,10) -> Nx.stack([241, 233, 191]) |> Nx.as_type(:u8)
+      Nx.equal(v,11) -> Nx.stack([248, 201, 95]) |> Nx.as_type(:u8)
+      Nx.equal(v,12) -> Nx.stack([255, 170, 0]) |> Nx.as_type(:u8)
+      Nx.equal(v,13) -> Nx.stack([204, 128, 0]) |> Nx.as_type(:u8)
+      Nx.equal(v,14) -> Nx.stack([153, 87, 0]) |> Nx.as_type(:u8)
+      Nx.equal(v,15) -> Nx.stack([106, 52, 3]) |> Nx.as_type(:u8)
+      1 -> Nx.stack([0,0,0]) |> Nx.as_type(:u8)
     end
   end
 end
@@ -317,43 +333,9 @@ end
 
 ## Computing the Mandelbrot set
 
-We will know reassemble our modules. All of these functions are numerical functions.
-
-Firstly, an example.
-
-```elixir
-dim = {500,500}; iter_max = 100
-
-p = Nx.tensor([30,40])
-c_i_j = Pixel.map(p,dim, defining_points)
-n_i_j = Orbit.number(c_i_j, iter_max)
-nm_i_j = Colour.normalize(n_i_j, iter_max)
-
-{Nx.to_number(n_i_j), Colour.rgb(nm_i_j)} |> dbg()
-
-p = Nx.tensor([40,70])
-c_i_j = Pixel.map(p,dim, defining_points)
-n_i_j = Orbit.number(c_i_j, iter_max)
-nm_i_j = Colour.normalize(n_i_j, iter_max)
-
-{Nx.to_number(n_i_j), Colour.rgb(nm_i_j)} |> dbg()
-
-```
-
-We found that this pixel reached a point in the complex plan that escapes rather quickly from the disk 2. It get stamped with some colour.
-
-```elixir
-{4,
- #Nx.Tensor<
-   u8[3]
-   EXLA.Backend<host:0, 0.3807096825.1655832596.50891>
-   [234, 244, 10]
- >}
-```
-
 **The final module**
 
-We then reassemble the tensor into the desired format for `Kino` to consume it and display.
+We reassemble the tensor into the desired format for `Kino` to consume it and display.
 
 > Note that you want to pass arguments into a `defn` function that you don't want to be treated as tensors, you need to use a keyword list or a map.
 
@@ -376,8 +358,7 @@ defmodule Mandelbrot do
 
     Pixel.map(cross_product,{h,w}, defining_points)
       |> Orbit.number(max_iter)
-      |> Colour.normalize(max_iter)
-      |> Colour.rgb()
+      |> Colour.rgb(max_iter)
       |> Nx.devectorize()
       |> Nx.reshape({h, w, 3})
       |> Nx.as_type(:u8)
@@ -390,8 +371,8 @@ Depending on your machine, the computation below can be lengthy.
 If you want to simply evaluate, set `h = w = 400`.
 
 ```elixir
-h = w = 400;
-Mandelbrot.compute(h: h, w: w, max_iter: 100)
+h = 350; w = 400
+Mandelbrot.compute(h: h, w: w, max_iter: 200)
 |> Kino.Image.new()
 ```
 
@@ -449,18 +430,19 @@ defmodule StreamMandelbrot do
 
     Pixel.map(cross_product,{h,w}, defining_points)
     |> Orbit.number(max_iter)
-    |> Colour.normalize(max_iter)
-    |> Colour.rgb()
+    |> Colour.rgb2(max_iter)
     |> Nx.devectorize()
     |> Nx.as_type(:u8)
   end
 end
 ```
 
-When we run the code, we have much faster results. On my machine, it took 44s to draw a 1M pixels image. We get the expected performance boost.
+We get the expected performance boost.
+
+> For the fun, we changed the colour palette.
 
 ```elixir
-h= w = 400;
+h=350;w=400
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
@@ -626,6 +608,7 @@ defmodule Zigit do
             return [_]u8{ 0, @as(u8, @intFromFloat(127 * (1 - scaled / 2))), @as(u8, @intFromFloat(255 * (1 - scaled))) };
         }
     }
+  
 
   """
 end
@@ -640,6 +623,178 @@ h = w = 5_000
 max_iter = 300;
 
 Zigit.generate_mandelbrot(h, w, max_iter)
+|> Nx.from_binary(:u8)
+|> Nx.reshape({h, w, 3})
+|> Kino.Image.new()
+```
+
+## More Zig: Misiurewicz point
+
+```elixir
+defmodule Mand do
+  use Zig, otp_app: :zigler,
+    nifs: [..., generate_misiurewicz: [:threaded]],
+    release_mode: :fast
+
+
+  ~Z"""
+    const beam = @import("beam");
+    const std = @import("std");
+    const Cx = std.math.Complex(f64);
+    
+    const print = std.debug.print;
+    
+    const Context = struct { res_x: usize, res_y: usize, imax: usize, w: f64, h: f64, topLeft: Cx, bottomRight: Cx };
+    
+    /// nif: generate_misiurewicz/7 Threaded
+    pub fn generate_misiurewicz(res_x: usize, res_y: usize, imax: usize, topLeft_x: f64, topLeft_y: f64, bottomRight_x: f64, bottomRight_y: f64) !beam.term {
+        const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
+        defer beam.allocator.free(pixels);
+    
+        const tl = Cx{ .re = topLeft_x, .im = topLeft_y };
+        const br = Cx{ .re = bottomRight_x, .im = bottomRight_y };
+        const w = br.re - tl.re;
+        const h = br.im - tl.im;
+        // threaded version
+        const ctx = Context{ .res_x = res_x, .res_y = res_y, .imax = imax, .topLeft = tl, .bottomRight = br, .w = w, .h = h };
+        const res = try createBands(pixels, ctx);
+        return beam.make(res, .{ .as = .binary });
+    }
+    
+    // <--- threaded version
+    fn createBands(pixels: []u8, ctx: Context) ![]u8 {
+        const cpus = try std.Thread.getCpuCount();
+        var threads = try beam.allocator.alloc(std.Thread, cpus);
+        defer beam.allocator.free(threads);
+    
+        const rows_to_process = ctx.res_y;
+        // one band is one count of cpus
+        const rows_per_band = (rows_to_process + cpus - 1) / cpus;
+    
+        for (0..cpus) |cpu_count| {
+            const start_row = cpu_count * rows_per_band;
+    
+            // Stop if there are no rows to process
+            if (start_row >= rows_to_process) break;
+    
+            const end_row = @min(start_row + rows_per_band, rows_to_process);
+            const args = .{ ctx, pixels, start_row, end_row };
+            threads[cpu_count] = try std.Thread.spawn(.{}, processRows, args);
+        }
+        for (threads[0..cpus]) |thread| {
+            thread.join();
+        }
+    
+        return pixels;
+    }
+    
+    fn processRows(ctx: Context, pixels: []u8, start_row: usize, end_row: usize) void {
+        for (start_row..end_row) |current_row| {
+            processRow(ctx, pixels, current_row);
+        }
+    }
+    
+    fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
+        // loop over columns
+        for (0..ctx.res_x) |col_id| {
+            const c = mapPixel(.{ @as(usize, @intCast(row_id)), @as(usize, @intCast(col_id)) }, ctx);
+            const iter = iterationNumber(c, ctx.imax);
+            const colour = createRgb2(iter, ctx.imax);
+    
+            const p_idx = (row_id * ctx.res_x + col_id) * 3;
+            pixels[p_idx + 0] = colour[0];
+            pixels[p_idx + 1] = colour[1];
+            pixels[p_idx + 2] = colour[2];
+        }
+    }
+    
+    fn mapPixel(pixel: [2]usize, ctx: Context) Cx {
+        const px_width = ctx.res_x - 1;
+        const px_height = ctx.res_y - 1;
+        const scale_x = ctx.w / @as(f64, @floatFromInt(px_width));
+        const scale_y = ctx.h / @as(f64, @floatFromInt(px_height));
+    
+        const re = ctx.topLeft.re + scale_x * @as(f64, @floatFromInt(pixel[1]));
+        const im = ctx.topLeft.im + scale_y * @as(f64, @floatFromInt(pixel[0]));
+        return Cx{ .re = re, .im = im };
+    }
+    
+    fn iterationNumber(c: Cx, imax: usize) ?usize {
+        if (c.re > 0.6 or c.re < -2.1) return null;
+        if (c.im > 1.2 or c.im < -1.2) return null;
+        // first cardiod
+        if ((c.re + 1) * (c.re + 1) + c.im * c.im < 0.0625) return null;
+    
+        var x2: f64 = 0;
+        var y2: f64 = 0;
+        var w: f64 = 0;
+    
+        for (0..imax) |j| {
+            if (x2 + y2 > 4) return j;
+            const x: f64 = x2 - y2 + c.re;
+            const y: f64 = w - x2 - y2 + c.im;
+            x2 = x * x;
+            y2 = y * y;
+            w = (x + y) * (x + y);
+        }
+    
+        // var z = Cx{ .re = 0.0, .im = 0.0 };
+        // for (0..imax) |j| {
+        //     if (sqnorm(z) > 4) return j;
+        //     z = Cx.mul(z, z).add(c);
+        // }
+        return null;
+    }
+    
+    fn sqnorm(z: Cx) f64 {
+        return z.re * z.re + z.im * z.im;
+    }
+    
+    
+    fn createRgb2(iter: ?usize, imax: usize) [3]u8 {
+        // If it didn't escape, return black
+        if (iter == null) return [_]u8{ 0, 0, 0 };
+    
+        if (iter.? < imax and iter.? > 0) {
+            const i = iter.? % 16;
+            return switch (i) {
+                0 => [_]u8{ 66, 30, 15 },
+                1 => [_]u8{ 25, 7, 26 },
+                2 => [_]u8{ 9, 1, 47 },
+                3 => [_]u8{ 4, 4, 73 },
+                4 => [_]u8{ 0, 7, 100 },
+                5 => [_]u8{ 12, 44, 138 },
+                6 => [_]u8{ 24, 82, 177 },
+                7 => [_]u8{ 57, 125, 209 },
+                8 => [_]u8{ 134, 181, 229 },
+                9 => [_]u8{ 211, 236, 248 },
+                10 => [_]u8{ 241, 233, 191 },
+                11 => [_]u8{ 248, 201, 95 },
+                12 => [_]u8{ 255, 170, 0 },
+                13 => [_]u8{ 204, 128, 0 },
+                14 => [_]u8{ 153, 87, 0 },
+                15 => [_]u8{ 106, 52, 3 },
+                else => [_]u8{ 0, 0, 0 },
+            };
+        }
+        return [_]u8{ 0, 0, 0 };
+      }
+  """
+end
+```
+
+```elixir
+x0 = -0.1011
+y0 = 0.9563
+tl_x = x0 - 0.0001
+tl_y = y0 + 0.0001
+br_x = x0 + 0.0001
+br_y = y0 - 0.0001
+h = 4_000
+w = 5_000
+max_iter = 400
+
+Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
 |> Nx.from_binary(:u8)
 |> Nx.reshape({h, w, 3})
 |> Kino.Image.new()

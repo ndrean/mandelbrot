@@ -115,6 +115,35 @@ test "createRgb" {
     }
 }
 
+fn createRgb2(iter: ?usize, imax: usize) [3]u8 {
+    // If it didn't escape, return black
+    if (iter == null) return [_]u8{ 0, 0, 0 };
+
+    if (iter.? < imax and iter.? > 0) {
+        const i = iter.? / 16;
+        return switch (i) {
+            0 => [_]u8{ 66, 30, 15 },
+            1 => [_]u8{ 25, 7, 26 },
+            2 => [_]u8{ 9, 1, 47 },
+            3 => [_]u8{ 4, 4, 73 },
+            4 => [_]u8{ 0, 7, 100 },
+            5 => [_]u8{ 12, 44, 138 },
+            6 => [_]u8{ 24, 82, 177 },
+            7 => [_]u8{ 57, 125, 209 },
+            8 => [_]u8{ 134, 181, 229 },
+            9 => [_]u8{ 211, 236, 248 },
+            10 => [_]u8{ 241, 233, 191 },
+            11 => [_]u8{ 248, 201, 95 },
+            12 => [_]u8{ 255, 170, 0 },
+            13 => [_]u8{ 204, 128, 0 },
+            14 => [_]u8{ 153, 87, 0 },
+            15 => [_]u8{ 106, 52, 3 },
+            else => [_]u8{ 0, 0, 0 },
+        };
+    }
+    return [_]u8{ 0, 0, 0 };
+}
+
 /// Given an image of size [width, height] pixels, and a region of
 /// a complex plane defined by the topLeft and bottomRight,
 /// the pixel coordinate in the output image is translated to a complex number
@@ -203,7 +232,7 @@ fn processRow(ctx: Context(u64), pixels: []u8, row_id: usize) void {
         for (0..ctx.resolution[0]) |col_id| {
             const c = mapPixel(.{ @as(u64, @intCast(row_id)), @as(u64, @intCast(col_id)) }, ctx);
             const iter = iterationNumber(c, ctx.imax);
-            const colour = createRgb(iter, ctx.imax);
+            const colour = createRgb2(iter, ctx.imax);
 
             const p_idx = (row_id * ctx.resolution[0] + col_id) * 3;
             pixels[p_idx + 0] = colour[0];
