@@ -72,10 +72,10 @@ end
 
 ```elixir
 # Unstable point
-cx = 0.35; 
-cy = 0.38
+cx = 0.345; 
+cy = 0.385
 
-{nb, data, data1} = Plot.new(cx, cy, 100)
+{nb, data, data1} = Plot.new(cx, cy, 200)
 "Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
 ```
 
