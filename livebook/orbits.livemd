@@ -81,7 +81,7 @@ cy = 0.38
 ```
 
 ```elixir
-VegaLite.new(width: 600, height: 600)
+VegaLite.new(width: 500, height: 400)
 |> VegaLite.layers([
   VegaLite.new()
   |> VegaLite.data_from_values(data, only: ["x", "y"])
@@ -107,13 +107,14 @@ cy = 0.3
 ```
 
 ```elixir
-VegaLite.new(width: 600, height: 600)
+VegaLite.new(width: 500, height: 400)
 |> VegaLite.layers([
   VegaLite.new()
+  |> VegaLite.param("height", bind: [input: :range, min: 0.20, max: 0.60,])
   |> VegaLite.data_from_values(data, only: ["x", "y"])
   |> VegaLite.mark(:point, color: "green")
   |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
   VegaLite.new()
   |> VegaLite.data_from_values(data1, only: ["x", "y"])
   |> VegaLite.mark(:point, color: "red")
@@ -123,6 +124,8 @@ VegaLite.new(width: 600, height: 600)
 
 ```
 
+## Other stable example
+
 ```elixir
 cx = 0.19345; 
 cy = 0.13245
@@ -131,22 +134,110 @@ cy = 0.13245
 "Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
 ```
 
-## Other stable example
-
 ```elixir
-VegaLite.new(width: 600, height: 600)
+VegaLite.new(width: 600, height: 400)
 |> VegaLite.layers([
   VegaLite.new()
-  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.26, step: 0.02])
+  |> VegaLite.param("width", bind: [input: :range, min: 0.16, max: 0.24, sttep: 0.02])
   |> VegaLite.data_from_values(data, only: ["x", "y"] )
   |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:x, "x", type: :quantitative, scale: [domain: [param: "width"]])
   |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
   VegaLite.new()
-  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.26, step: 0.02])
+  |> VegaLite.param("width", bind: [input: :range, min: 0.16, max: 0.24])
   |> VegaLite.data_from_values(data1, only: ["x", "y"])
   |> VegaLite.mark(:point, color: "red")
   |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+])
+```
+
+## Other remarkable points
+
+## Feigenbaum points
+
+```elixir
+cx = -0.1528; 
+cy = 1.0397;
+
+#cx = -1.401155; 
+#cy=0;
+
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
+```
+
+```elixir
+VegaLite.new(width: 600, height: 400)
+|> VegaLite.layers([
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data, only: ["x", "y"] )
+  |> VegaLite.mark(:point, color: "green")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "red")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+])
+```
+
+```elixir
+cx = -1.401155; 
+cy=0;
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
+```
+
+```elixir
+VegaLite.new(width: 600, height: 300)
+|> VegaLite.layers([
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data, only: ["x", "y"] )
+  |> VegaLite.mark(:point, color: "green")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "red")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+])
+```
+
+## Misiurewicz point
+
+```elixir
+cx = -0.1011; 
+cy = 0.9563
+
+{nb, data, data1} = Plot.new(cx, cy, 100)
+"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
+```
+
+```elixir
+VegaLite.new(width: 600, height: 400)
+|> VegaLite.layers([
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data, only: ["x", "y"] )
+  |> VegaLite.mark(:point, color: "green")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
+  VegaLite.new()
+  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
+  |> VegaLite.data_from_values(data1, only: ["x", "y"])
+  |> VegaLite.mark(:point, color: "red")
+  |> VegaLite.encode_field(:x, "x", type: :quantitative)
+  |> VegaLite.encode_field(:y, "y", type: :quantitative),
 ])
 ```
