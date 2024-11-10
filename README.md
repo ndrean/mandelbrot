@@ -197,6 +197,8 @@ This can be run in a Livebook.
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
 
 
+![image](https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a)
+
 <details><summary>Livebook with pur Elixir and embedded Zig</summary>
 
 ```elixir
