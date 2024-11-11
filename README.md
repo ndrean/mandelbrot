@@ -205,7 +205,13 @@ We can draw these kind of images. It is faster with the Zig embedded ocde and im
 
 [Needs latex]
 
-In fact, this set is contained in a disk $` D_2` $ of radius 2. This does not mean that $` 0_c `$ is bounded whenever $` |c|\leq 2 `$ as seen above. Merely $` 0_c `$ is certainly unbounded - the sequence of $` z_n `$ is divergent whenever $` |c| > 2 `$.
+In fact, this set is contained in a disk 
+$ D_2$ of radius 2. This does not mean that 
+$ 0_c$ is bounded whenever 
+$|c|\leq 2$ as seen above. Merely 
+$0_c$ is certainly unbounded - the sequence of 
+$z_n$ is divergent whenever 
+$|c| > 2$.
 
 We have a more precise criteria: whenever the absolute value $` |z_n| `$ is greater that 2, then the absolute values of the following iterates grow to infinity.
 
@@ -236,13 +242,13 @@ When you represente the full Mandelbrot set, you can take advantage of the symme
 
 #### Math details:
 
-Firstly consider some $|c| \leq 2$ and suppose that for some $N$, we have $|z_N|= 2+a$ with $a > 0$. Then:
+Firstly consider some $` |c| \leq 2 `$ and suppose that for some $` N `$, we have $` |z_N|= 2+a `$ with $` a > 0 `$. Then:
 
 ```math
 |z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a = |z_N|+a
 ```
 
-so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
+so $` |z_{N+k}| \geq |z_N| +ka \to \infty `$ as $` k\to \infty `$.
 
 Lastly, consider $|c| > 2$. Then for every $n$, we have $|z_n| > |c|$. So:
 
