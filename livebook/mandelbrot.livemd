@@ -388,21 +388,15 @@ When you use `async_stream`, the BEAM - the VM that runs this code - parallelise
 
 We also set `ordered: true` as we need to sum-up the results in an ordered manner.
 
-> Another possible optimisation is to remark that the image is symmetric. You can compute half of the image (redefine `h` to be `h-rem(h, cpus*2)` but you would need to be able to reverse a tensor.
+Another possible optimisation is to remark that the image is symmetric when you compute the full image. You can compute half of the image and stack it the reversed tensor. This gives an extra boost. This is implemented in `sym/1`.
 
 ```elixir
 defmodule StreamMandelbrot do
   import Nx.Defn
 
-    @doc"""
-    Example: 42 rows, 8 cpus
-    42 rows = 8cpus * 5 + 2
-    We run 8 threads consuming 5 rows each
-    We just ignore the last 2 rows.
-    """
     def run(%{h: h, w: w} = opts) do
       cpus = :erlang.system_info(:logical_processors_available)
-      # we eliminate a few rows from the final image, 8 at most.
+      # we eliminate a few rows from the final image, #cpus at most.
       h = h - rem(h,cpus)
       rows_per_cpu = div(h, cpus)
 
@@ -420,12 +414,61 @@ defmodule StreamMandelbrot do
       |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
       |> Nx.stack()
       |> Nx.reshape({h,w,3})
-  end
+    end
+
+    defn compute(cross_product, %{h: h, w: w, max_iter: max_iter}) do
+      top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -1.2;
+      defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
+  
+      Pixel.map(cross_product,{h,w}, defining_points)
+      |> Orbit.number(max_iter)
+      |> Colour.rgb2(max_iter)
+      |> Nx.devectorize()
+      |> Nx.as_type(:u8)
+    end
+
+    #-------------------------------------------------------------------------
+    def sym(%{h: h, w: w} = opts) do
+      cpus = :erlang.system_info(:logical_processors_available)
+      # we eliminate a few rows from the final image, 8 at most.
+      half_h = div(h,2)
+      rem = rem(half_h, cpus)
+      half_new = half_h - rem 
+      rows_per_cpu = div(half_new, cpus)
+      opts = Map.merge(opts, %{h: half_new })
+
+      half_tensor = 
+        Task.async_stream(0..cpus-1, fn cpu_count ->
+          # we shift the start index by the number of rows already consummed
+          iota_rows = 
+            Nx.iota({rows_per_cpu}, type: :u16) 
+            |> Nx.add(cpu_count * rows_per_cpu)
+            |> Nx.vectorize(:rows)
+          # full width
+          iota_cols = 
+            Nx.iota({w}, type: :u16) 
+            |> Nx.vectorize(:cols)
+          cross_product = Nx.stack([iota_rows, iota_cols])
+          Nx.Defn.jit_apply(fn t ->
+            compute_half(t, opts) end, [cross_product])
+          end,
+          timeout: :infinity, ordered: true
+        )
+        |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
+        |> Nx.stack()
+        |> Nx.devectorize()
+        
+
+      flah_tensor = 
+        Nx.tensor(half_tensor, names: [:cpus, :rows, :cols, :rgbs]) 
+        |> Nx.reverse(axes: [:cpus, :rows])
+
+      Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({half_new *2, w, 3})
+    end
 
 
-
-  defn compute(cross_product, %{h: h, w: w, max_iter: max_iter}) do
-    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -1.2;
+  defn compute_half(cross_product, %{h: h, w: w, max_iter: max_iter}) do
+    top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = 0;
     defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
     Pixel.map(cross_product,{h,w}, defining_points)
@@ -442,9 +485,18 @@ We get the expected performance boost.
 > For the fun, we changed the colour palette.
 
 ```elixir
-h=350;w=400
+h = 350; w =400;
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
+|> Kino.Image.new()
+```
+
+When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
+
+```elixir
+h = 1200; w = 1500;
+
+StreamMandelbrot.sym( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
 ```
 
