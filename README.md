@@ -205,7 +205,7 @@ We can draw these kind of images. It is faster with the Zig embedded ocde and im
 
 [Needs latex]
 
-In fact, this set is contained in a disk $D_2$ of radius 2. This does not mean that $0_c$ is bounded whenever $|c|\leq 2$ as seen above. Merely $0_c$ is certainly unbounded - the sequence of $z_n$ is divergent whenever $|c| > 2$.
+In fact, this set is contained in a disk $`D_2`$ of radius 2. This does not mean that $`0_c`$ is bounded whenever $`|c|\leq 2`$ as seen above. Merely $`0_c`$ is certainly unbounded - the sequence of $`z_n`$ is divergent whenever $`|c| > 2`$.
 
 We have a more precise criteria: whenever the absolute value $|z_n|$ is greater that 2, then the absolute values of the following iterates grow to infinity.
 
