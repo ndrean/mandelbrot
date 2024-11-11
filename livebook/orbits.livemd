@@ -1,4 +1,4 @@
-# Mandelbrot orbits
+# Mandelbrot orbits with Nx
 
 ```elixir
 Mix.install(
