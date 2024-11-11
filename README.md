@@ -205,24 +205,26 @@ We can draw these kind of images. It is faster with the Zig embedded ocde and im
 
 [Needs latex]
 
-In fact, this set is contained in a disk `$D_2$` of radius 2. This does not mean that $`0_c`$ is bounded whenever $`|c|\leq 2`$ as seen above. Merely $`0_c`$ is certainly unbounded - the sequence of $`z_n`$ is divergent whenever $`|c| > 2`$.
+In fact, this set is contained in a disk $` D_2` $ of radius 2. This does not mean that $` 0_c `$ is bounded whenever $` |c|\leq 2 `$ as seen above. Merely $` 0_c `$ is certainly unbounded - the sequence of $` z_n `$ is divergent whenever $` |c| > 2 `$.
 
-We have a more precise criteria: whenever the absolute value $|z_n|$ is greater that 2, then the absolute values of the following iterates grow to infinity.
+We have a more precise criteria: whenever the absolute value $` |z_n| `$ is greater that 2, then the absolute values of the following iterates grow to infinity.
 
-The **Mandelbrot set** $M$ is the set of numbers $c$ such that its sequence $O_c$ remains bounded (in absolute value). This means that $| z_n (c) | < 2$ for any $n$.
+The **Mandelbrot set** $M$ is the set of numbers $c$ such that its sequence $O_c$ remains bounded (in absolute value). This means that $` | z_n (c) | < 2 `$ for any $` n `$.
 
-When the sequence $O_c$ is _unbounded_, we associate to $c$ the first integer $N_c$ such that $|z_N (c)| > 2$.
+When the sequence $` O_c `$ is _unbounded_, we associate to $c$ the first integer $N_c$ such that $` |z_N (c)| > 2 `$.
 
-Since we have to stop the computations at one point, we set a limit $m$ to the number of iteration. Whenever we have $|z_{n}|\leq 2$ when $n=m$, then point $c$ is declared _"mandelbrot stable"_.
+Since we have to stop the computations at one point, we set a limit $m$ to the number of iteration. Whenever we have $` |z_{n}|\leq 2 `$ when $n=m$, then point $` c `$ is declared _"mandelbrot stable"_.
 
-When the sequence $O_c$ remains bounded, we associate to $c$ a value $n_{\infty}$.
+When the sequence $O_c$ remains bounded, we associate to $` c `$ a value $` max `$.
 
-So to each $c$ in the plane, we can associate an integer $n$, whether `null` or a value between 1 and $m$.
-Furthermore, we decide to associate each integer $n$ a certain RGB colour.
+So to each $` c `$ in the plane, we can associate an integer $n$, whether `null` or a value between 1 and $m$.
+Furthermore, we decide to associate each integer $` n `$ a certain RGB colour.
 
 With this map:
 
-$$c \mapsto n(c) \Leftrightarrow \mathrm{colour} = f\big(R(n),G(n),B(n)\big)$$
+```math
+c \mapsto n(c) \Leftrightarrow \mathrm{colour} = f\big(R(n),G(n),B(n)\big)
+```
 
 we are able to plot something.
 
@@ -236,13 +238,17 @@ When you represente the full Mandelbrot set, you can take advantage of the symme
 
 Firstly consider some $|c| \leq 2$ and suppose that for some $N$, we have $|z_N|= 2+a$ with $a > 0$. Then:
 
-$$|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a = |z_N|+a$$
+```math
+|z_{N+1}| = |z_N^2+c|\geq |z_N|^2 -|c| > 2+2a = |z_N|+a
+```
 
 so $|z_{N+k}| \geq |z_N| +ka \to \infty$ as $k\to \infty$.
 
 Lastly, consider $|c| > 2$. Then for every $n$, we have $|z_n| > |c|$. So:
 
-$$|z_{n+1}| \geq |z_n|^2 -|c| \geq |z_n|^2-|z_n| = |z_n|(|z_n|-1) \geq |z_n|(|c|-1) > |z_n|$$
+```math
+|z_{n+1}| \geq |z_n|^2 -|c| \geq |z_n|^2-|z_n| = |z_n|(|z_n|-1) \geq |z_n|(|c|-1) > |z_n|
+```
 
 so the term grows to infinity and "escapes".
 
@@ -251,5 +257,5 @@ so the term grows to infinity and "escapes".
 The _mandelbrot set_ $M$ is **compact**, as _closed_ and bounded (contained in the disk of radius 2).
 It is also surprisingly _connected_.
 
-> Fix an integer $n\geq 1$ and consider the set $M_n$ of complex numbers $c$ such that there absolute value at the rank $n$ is less than 2. In other words, $M_n=\{c\in\mathbb{C}, \, |z_n(c)|\leq 2\}$. Then the complex numbers Mandelbrot-stable are precisely the numbers in all these $ M_n$, thus $M = \bigcap_n M_n$.
+> Fix an integer $n\geq 1$ and consider the set $M_n$ of complex numbers $c$ such that there absolute value at the rank $n$ is less than 2. In other words, $ M_n=\{c\in\mathbb{C}, \, |z_n(c)|\leq 2\} $. Then the complex numbers Mandelbrot-stable are precisely the numbers in all these $ M_n$, thus $M = \bigcap_n M_n$.
 > We conclude by remarking that each $M_n$ is closed as a preimage of the closed set $ [0,2]$ by a continous function, and since $M$ is an intersection of closed sets (not necesserally countable), it is closed.
