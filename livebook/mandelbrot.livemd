@@ -297,7 +297,7 @@ defmodule Colour do
   end
 
   defn rgb2(n, max_iter) do
-    v = Nx.remainder(n,max_iter)
+    v = Nx.remainder(n,16)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
       Nx.equal(v,0) -> Nx.stack([66, 30, 15]) |> Nx.as_type(:u8)
@@ -485,7 +485,7 @@ StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
 
 ```elixir
-h = 600; w = 700;
+h = 600; w = 701;
 
 StreamMandelbrot.sym( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
