@@ -296,17 +296,19 @@ defmodule Colour do
     end
   end
 
-  defn map(n, max_iter) do
-    t1 = n  / max_iter
-    t16 = t1 * 16
-    tf = Nx.floor(t16)
-    tmod = t16 - tf
-    t1616 = tmod * 16
-    Nx.floor(t1616)
-  end
+  #defn map(n, max_iter) do
+    #t1 = n  / max_iter
+    #t16 = t1 * 16
+    #tf = Nx.floor(t16)
+    #tmod = t16 - tf
+    #t1616 = tmod * 16
+    #Nx.floor(t1616)
+  #end
+  
 
   defn rgb2(n, max_iter) do
-    v = map(n, max_iter)
+    #v = map(n, max_iter)
+    v = Nx.remainder(n,max_iter)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
       Nx.equal(v,0) -> Nx.stack([66, 30, 15]) |> Nx.as_type(:u8)
@@ -368,10 +370,10 @@ end
 ```
 
 Depending on your machine, the computation below can be lengthy.
-If you want to simply evaluate, set `h = w = 400`.
+If you want to simply evaluate, set `h = 400`.
 
 ```elixir
-h = 350; w = 400
+h = 400; w = 500
 Mandelbrot.compute(h: h, w: w, max_iter: 200)
 |> Kino.Image.new()
 ```
@@ -485,7 +487,7 @@ We get the expected performance boost.
 > For the fun, we changed the colour palette.
 
 ```elixir
-h = 350; w =400;
+h = 400; w =500;
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
@@ -494,7 +496,7 @@ StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
 
 ```elixir
-h = 1200; w = 1500;
+h = 400; w = 500;
 
 StreamMandelbrot.sym( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
