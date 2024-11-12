@@ -359,10 +359,10 @@ end
 ```
 
 Depending on your machine, the computation below can be lengthy.
-If you want to simply evaluate, set `h = 400`.
+If you want to simply evaluate, set low values  `h = w = 300` and `max_iter = 100`.
 
 ```elixir
-h = 400; w = 500
+h = 600; w = 700
 Mandelbrot.compute(h: h, w: w, max_iter: 200)
 |> Kino.Image.new()
 ```
@@ -476,7 +476,7 @@ We get the expected performance boost.
 > For the fun, we changed the colour palette.
 
 ```elixir
-h = 400; w =500;
+h = 600; w =700;
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
@@ -485,7 +485,7 @@ StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
 When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
 
 ```elixir
-h = 400; w = 500;
+h = 600; w = 700;
 
 StreamMandelbrot.sym( %{h: h, w: w, max_iter: 200})
 |> Kino.Image.new()
