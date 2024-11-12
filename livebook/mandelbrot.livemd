@@ -296,18 +296,7 @@ defmodule Colour do
     end
   end
 
-  #defn map(n, max_iter) do
-    #t1 = n  / max_iter
-    #t16 = t1 * 16
-    #tf = Nx.floor(t16)
-    #tmod = t16 - tf
-    #t1616 = tmod * 16
-    #Nx.floor(t1616)
-  #end
-  
-
   defn rgb2(n, max_iter) do
-    #v = map(n, max_iter)
     v = Nx.remainder(n,max_iter)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
