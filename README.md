@@ -31,7 +31,7 @@ We firstly evaluated in a Livebook how stable the orbits are for some points.
 
 For example, for `c=1`, we have the orbit `O_1 = { 0, 1, 2, 5, 26,...}` but for `c=-1`, we have a cyclic orbit, `O_{-1} = {−1, 0, −1, 0,...}`.
 
-The code below is in the Livebook "orbits".
+The code below computes "orbits". You select a point and a little animation displays the orbit.
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)
 
