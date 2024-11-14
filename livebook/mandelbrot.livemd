@@ -1,3 +1,5 @@
+<!-- livebook:{"file_entries":[{"name":"Screenshot-2024-11-14-at-19.22.38.jpeg","type":"attachment"},{"file":{"file_system_id":"local","file_system_type":"local","path":"/Users/nevendrean/Desktop/Screenshot 2024-11-14 at 19.22.38.png"},"name":"Screenshot_2024-11-14_at_19.22.38.png","type":"file"}]} -->
+
 # Mandelbrot set with Elixir Nx and Zigler
 
 ```elixir
@@ -128,8 +130,14 @@ If it escapes, meaning one iterate has a norm greater than 2, then we calculate 
 
 If we inspect the orbits, we discover ncie figures. The Livebook below lets you play with the plan and displays orbits on-click.
 
+/Users/nevendrean/Desktop/Screenshot 2024-11-14 at 19.22.38.png
+
 Livebook to compute orbits:
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)
+
+<!-- livebook:{"break_markdown":true} -->
+
+![](files/Screenshot-2024-11-14-at-19.22.38.jpeg)
 
 ## Complex calculus
 
@@ -906,3 +914,5 @@ Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
 |> Nx.reshape({h, w, 3})
 |> Kino.Image.new()
 ```
+
+<!-- livebook:{"offset":31537,"stamp":{"token":"XCP.hfAK2AohEGCsrTVn9DFRLQeZr2d8nm1NcAy6ksA36JjqlXNFDPtVT-UWwlCqonkMp9rHfgKchAWkp7xUEU0t_IlQvQQG9q79cXJkaQ","version":2}} -->
