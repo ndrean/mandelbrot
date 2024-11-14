@@ -126,13 +126,7 @@ If the orbit of `c` remains bounded, we assign an _iteration number_ to `max_ite
 
 If it escapes, meaning one iterate has a norm greater than 2, then we calculate the _first index_ such that the iterate norm is greater than 2 (in absolute value as a complex, or its norm as a point).
 
-Example: orbit of the stable point: (0.3, 0.3)
-
-![Stable](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/oju63qir5hnusmxyayap.png)
-
-Example: orbit of a unstable point: (0.35,0.38) escapes after 49 iterations
-
-![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/4eyjzfteb7wijr5raxn4.png)
+If we inspect the orbits, we discover ncie figures. The Livebook below lets you play with the plan and displays orbits on-click.
 
 Livebook to compute orbits:
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)

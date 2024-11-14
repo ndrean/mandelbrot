@@ -12,20 +12,6 @@ Mix.install(
 Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
-## Nx computations
-
-```elixir
-defmodule Ncx do
-  import Nx.Defn
-
-  defn i(), do: Nx.Constants.i()
-  # primitive to build a complex scalar tensor
-  defn new(x,y), do: x + i() * y
-  # square norm
-  defn sq_norm(z), do: Nx.conjugate(z) |> Nx.dot(z) |> Nx.real()
-end
-```
-
 ## Orbit number
 
 ```elixir
@@ -33,13 +19,15 @@ defmodule Orbit do
   import Nx.Defn
 
   defn p(z,c), do: z*z + c
+
+  defn sq_norm(z), do: Nx.real(z * Nx.conjugate(z))
   
   defn calc(c, opts) do
     n = opts[:n]
 
     while { i=1, _nb=0, t=Nx.broadcast(c,{n}),c }, Nx.less(i,n) do
       cond do
-        Nx.greater(Ncx.sq_norm(t[i-1]), 4) ->
+        Nx.greater(sq_norm(t[i-1]), 4) ->
           {n, i-1, t, c}
         true ->
         { i + 1, i, Nx.indexed_put(t, Nx.stack([i]), p(t[i-1], c)),c }
@@ -53,190 +41,209 @@ end
 
 ```elixir
 defmodule Plot do
-  def new(cx,cy, imax) do
-    c = Ncx.new(cx,cy)
-    {_, nb, t, _} = Orbit.calc(c, n: imax)   
+  import Nx.Defn
+  import Nx.Constants, only: [i: 0]
 
-    {data_x,data_y} = 
-      Nx.slice(t, [0], [Nx.to_number(nb)])
+  defn point(cx,cy), do: cx + i() * cy
+  
+  def to_js(cx, cy, imax) do
+    c = point(cx,cy) |> dbg()
+    {_, t_nb, t, _} = Orbit.calc(c, n: imax) 
+
+    nb = Nx.to_number(t_nb)
+    
+    data = 
+      t[0..nb]
       |> Nx.to_list()
-      |> Enum.map(fn z -> {Complex.real(z), Complex.imag(z)} end)
-      |> Enum.unzip()
+      |> Enum.map(fn z -> [Complex.real(z), Complex.imag(z)] end)
 
-    {nb, %{x: data_x, y: data_y}, %{x: [cx], y: [cy]}}
+    {nb, data}
   end
 end
 ```
 
-## Unstable point
+The module below is a `Kino.Js.Live` module to interact between the browser and teh Livebook as a server. It will draw  2D plan with a grid.
+
+When you click on the plan, we calculate the points of the orbit and display them with a little animation.
+
+The client server communication uses the primitives `handle_event` and `broadcast` server side, and `pushEvent` and `handleEvent` clent side.
 
 ```elixir
-# Unstable point
-cx = 0.345; 
-cy = 0.385
+defmodule LiveOrbit do
+  use Kino.JS
+  use Kino.JS.Live
 
-{nb, data, data1} = Plot.new(cx, cy, 200)
-"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
+  def canvas() do
+    """
+    <canvas id="myCanvas" width="800" height="800"></canvas>
+    <p>Clicked point coordinates: <span id="coordinates"></span> &nbsp, Iteration number: <span id="number"></span></p>
+    """
+  end
+
+  def run(), do: Kino.JS.Live.new(__MODULE__, canvas())
+
+  @impl true
+  def init(html, ctx) do
+    ctx = assign(ctx, %{data: [], imax: 200})
+    {:ok, assign(ctx, html: html)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  #-------------- received from client
+  @impl true
+  def handle_event("clicked",  %{"x"=> x, "y" => y} = _evt, ctx) do
+    %{assigns: %{imax: imax}} = ctx
+    {nb, data} = Plot.to_js(x, y, imax)
+    
+    # send data to the client
+    broadcast_event(ctx, "points", %{data: data})
+    broadcast_event(ctx, "number", %{nb: nb})
+    
+    {:noreply, ctx}
+  end
+
+  asset "main.js" do
+    """
+    export function init(ctx, html) {
+      ctx.root.innerHTML = html;
+      console.log("loaded");
+
+      const canvas = document.getElementById("myCanvas");
+      const canvasCtx = canvas.getContext("2d");
+      const coordsElement = document.getElementById("coordinates");
+      const iterationNumber = document.getElementById("number")
+  
+      // Canvas dimensions
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+  
+      // Coordinate plane bounds
+      const minX = -1.5;
+      const maxX = 1;
+      const minY = -1;
+      const maxY = 1;
+
+      // Function to convert canvas coordinate to complex coordinate
+      function toComplexCoord(canvasX, canvasY) {
+        const x = minX + ((canvasX / canvasWidth) * (maxX - minX));
+        const y = maxY - ((canvasY / canvasHeight) * (maxY - minY));
+        return { x, y };
+      }
+    
+      // Function to convert compelx coordinate to canvas coordinate
+      function toCanvasCoord(x, y) {
+        const canvasX = ((x - minX) / (maxX - minX)) * canvasWidth;
+        const canvasY = canvasHeight - ((y - minY) / (maxY - minY)) * canvasHeight;
+        return { x: canvasX, y: canvasY };
+      }
+    
+      // Draw x-axis
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(0, canvasHeight * (Math.abs(maxY) / (Math.abs(maxY) + Math.abs(minY))));
+      canvasCtx.lineTo(canvasWidth, canvasHeight * (Math.abs(maxY) / (Math.abs(maxY) + Math.abs(minY))));
+      canvasCtx.strokeStyle = 'black';
+      canvasCtx.stroke();
+  
+      // Draw y-axis
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(canvasWidth * (Math.abs(minX) / (Math.abs(minX) + Math.abs(maxX))), 0);
+      canvasCtx.lineTo(canvasWidth * (Math.abs(minX) / (Math.abs(minX) + Math.abs(maxX))), canvasHeight);
+      canvasCtx.strokeStyle = 'black';
+      canvasCtx.stroke();
+
+      // Draw grid dynamically based on min/max X/Y
+      //const gridStepX = (maxX - minX) / 10; // Divide the X range into 10 grid lines
+      //const gridStepY = (maxY - minY) / 10; // Divide the Y range into 10 grid lines
+      const gridStep = 0.2;
+      canvasCtx.strokeStyle = '#ccc';
+      canvasCtx.setLineDash([2, 4]);
+    
+      for (let x = minX; x <= maxX; x += gridStep) {
+        const { x: canvasX } = toCanvasCoord(x, 0);
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(canvasX, 0);
+        canvasCtx.lineTo(canvasX, canvasHeight);
+        canvasCtx.stroke();
+        canvasCtx.setLineDash([]);
+      }
+      for (let y = minY; y <= maxY; y += gridStep) {
+        const { y: canvasY } = toCanvasCoord(0, y);
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, canvasY);
+        canvasCtx.lineTo(canvasWidth, canvasY);
+        canvasCtx.stroke();
+        canvasCtx.setLineDash([]);
+      }
+    
+      canvasCtx.setLineDash([]);
+
+
+      //---------- send click position ------------------------
+    
+      canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        console.log("click event", x,y)
+        const { x: complexX, y: complexY } = toComplexCoord(x, y);
+        coordsElement.textContent = `${complexX.toFixed(2)}, ${complexY.toFixed(2)}`;
+    
+        //-- send data to the server -->
+        ctx.pushEvent("clicked", {x: Number(complexX), y: Number(complexY)})
+      });
+
+      //----------- receive computed points from server ---------
+      // callback from server event "broadcast"
+      ctx.handleEvent("points", drawPointsWithAnimation)
+
+      ctx.handleEvent("number", ({nb}) => {iterationNumber.textContent = nb});
+
+      // Draw each point with animation
+      function drawPointsWithAnimation({data: points}) {
+        let index = 0;
+        const intervalId = setInterval(() => {
+          if (index >= points.length) {
+            clearInterval(intervalId); // Stop the animation when all points are drawn
+            return;
+          }
+      
+          // Convert complex point to canvas coordinates
+          const point = toCanvasCoord(points[index][0], points[index][1]);
+          
+          // Draw the point as a small circle
+          canvasCtx.beginPath();
+          const radius = index === 0 ? 6 : 3;
+          canvasCtx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+          canvasCtx.fillStyle = index === 0 ? "green" : 'red';
+          canvasCtx.fill();
+      
+          // Draw a dotted line connecting to the previous point, if exists
+          if (index > 0) {
+            const prevPoint = toCanvasCoord(points[index - 1][0], points[index - 1][1]);
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(prevPoint.x, prevPoint.y);
+            canvasCtx.lineTo(point.x, point.y);
+            canvasCtx.strokeStyle = 'blue';
+            canvasCtx.setLineDash([5, 5]); // Creates a dotted line
+            canvasCtx.lineWidth = 1;
+            canvasCtx.stroke();
+            canvasCtx.setLineDash([]); // Reset line dash
+          }
+          index++;
+        }, 50); // 500 ms delay between each point
+      }
+    }
+    """
+  end
+end
 ```
 
-```elixir
-VegaLite.new(width: 500, height: 400)
-|> VegaLite.layers([
-  VegaLite.new()
-  |> VegaLite.data_from_values(data, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "blue")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-  VegaLite.new()
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, tooltip: true, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative)
-])
-```
-
-## Example Stable point
+You can visualize the orbits of any point by clicking into the plot below. It will display the sequence and the ieration number.
 
 ```elixir
-cx = 0.3; 
-cy = 0.3
-
-{nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is stable. It says bounded after #{Nx.to_number(nb)} iterations"
-```
-
-```elixir
-VegaLite.new(width: 500, height: 400)
-|> VegaLite.layers([
-  VegaLite.new()
-  |> VegaLite.param("height", bind: [input: :range, min: 0.20, max: 0.60,])
-  |> VegaLite.data_from_values(data, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
-  VegaLite.new()
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-])
-
-```
-
-## Other stable example
-
-```elixir
-cx = 0.19345; 
-cy = 0.13245
-
-{nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
-```
-
-```elixir
-VegaLite.new(width: 600, height: 400)
-|> VegaLite.layers([
-  VegaLite.new()
-  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.26, step: 0.02])
-  |> VegaLite.param("width", bind: [input: :range, min: 0.16, max: 0.24, sttep: 0.02])
-  |> VegaLite.data_from_values(data, only: ["x", "y"] )
-  |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative, scale: [domain: [param: "width"]])
-  |> VegaLite.encode_field(:y, "y", type: :quantitative, scale: [domain: [param: "height"]]),
-  VegaLite.new()
-  |> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.26, step: 0.02])
-  |> VegaLite.param("width", bind: [input: :range, min: 0.16, max: 0.24])
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-])
-```
-
-## Other remarkable points
-
-## Feigenbaum points
-
-```elixir
-cx = -0.1528; 
-cy = 1.0397;
-
-#cx = -1.401155; 
-#cy=0;
-
-
-{nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
-```
-
-```elixir
-VegaLite.new(width: 600, height: 400)
-|> VegaLite.layers([
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data, only: ["x", "y"] )
-  |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-])
-```
-
-```elixir
-cx = -1.401155; 
-cy=0;
-
-{nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
-```
-
-```elixir
-VegaLite.new(width: 600, height: 300)
-|> VegaLite.layers([
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data, only: ["x", "y"] )
-  |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-])
-```
-
-## Misiurewicz point
-
-```elixir
-cx = -0.1011; 
-cy = 0.9563
-
-{nb, data, data1} = Plot.new(cx, cy, 100)
-"Point [#{cx},#{cy}] is #{if Nx.to_number(nb) < 99, do: "un"}stable after #{Nx.to_number(nb)} iterations"
-```
-
-```elixir
-VegaLite.new(width: 600, height: 400)
-|> VegaLite.layers([
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data, only: ["x", "y"] )
-  |> VegaLite.mark(:point, color: "green")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-  VegaLite.new()
-  #|> VegaLite.param("height", bind: [input: :range, min: 0.12, max: 0.24, step: 0.02])
-  |> VegaLite.data_from_values(data1, only: ["x", "y"])
-  |> VegaLite.mark(:point, color: "red")
-  |> VegaLite.encode_field(:x, "x", type: :quantitative)
-  |> VegaLite.encode_field(:y, "y", type: :quantitative),
-])
+LiveOrbit.run()
 ```
