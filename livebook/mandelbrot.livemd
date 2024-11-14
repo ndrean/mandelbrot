@@ -19,6 +19,10 @@ Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 If you run into an error above, this means that you don't have Zig. Comment the package `Zigler` above.
 This means you can't run the very last module where we use inline `Zig` code.
 
+```elixir
+:observer.start()
+```
+
 ## Introduction
 
 We want to produce an image that represents the beautiful **Mandelbrot set**
@@ -360,15 +364,24 @@ Mandelbrot.compute(h: h, w: w, max_iter: 200)
 
 When the resolution of the image increases, it is interesting to parallelise the computations.
 
-We divide the image in horizontal bands, as many as the number of CPU cores on the machine.
+We divide the image in horizontal bands:
 
-When you use `async_stream`, the BEAM - the VM that runs this code - parallelises the running code on the cores.
+* "per cpu": fix the numbers of "bands" to the number of CPU cores and spawn processes,
+* "per fixed rows": we fix the number of rows per process, and spawn as many tasks as needed.
 
 > This is worth only if the size of the image is large enough as this comes with non negligible overhead.
 
-We also set `ordered: true` as we need to sum-up the results in an ordered manner.
+When we run "per cpu", the number of rows to compute per process varies. We use `Task.async_stream` and set `ordered: true` as we need to sum-up the results in an ordered manner.
 
-Another possible optimisation is to remark that the image is symmetric when you compute the full image. You can compute half of the image and stack to it the reversed tensor. This gives an extra boost. This is implemented in `sym/1`.
+When we run "per fixed rows", we use `Task.async` and return the "task_id"  to be able to sort the result.
+
+Lastly, another possible optimisation is to remark that the image is symmetric when you compute the full image. You can compute half of the image and stack to it the reversed tensor. This gives an extra boost.
+
+The full computation is done in `StreamMandelbrot.run`.
+
+The "per cpu" + half computation is done in `StreamMandelbrot.sym`.
+
+The "per fixed rows" + half computation is done in `StreamMandelbrot.parall_sym`
 
 ```elixir
 defmodule StreamMandelbrot do
@@ -435,9 +448,11 @@ defmodule StreamMandelbrot do
             |> Nx.vectorize(:cols)
           cross_product = Nx.stack([iota_rows, iota_cols])
           Nx.Defn.jit_apply(fn t ->
-            compute_half(t, opts) end, [cross_product])
+            compute_half(t, opts) end, 
+            [cross_product]
+          )
           end,
-          timeout: :infinity, ordered: true
+          timeout: :infinity, ordered: true, compiler: EXLA
         )
         |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
         |> Nx.stack()
@@ -463,6 +478,57 @@ defmodule StreamMandelbrot do
     |> Nx.devectorize()
     |> Nx.as_type(:u8)
   end
+
+  #--------------------------------------------------------------------------------
+  # Fix the number of rows and spawn concurrently and compute half (for full image)
+  # need to check the row_id .compute half
+  #--------------------------------------------------------------------------------
+
+  def paral_sym(%{h: h, w: w} = opts) do
+    cpus = :erlang.system_info(:logical_processors_available)
+    half_h = div(h,2)
+    
+    rows_per_task = 30
+    half_new = half_h - rem(half_h, rows_per_task)
+    nb_tasks = div(half_new, rows_per_task) |> dbg()
+    opts = Map.merge(opts, %{h: half_new })
+
+      half_tensor =
+        Task.async_stream(0..nb_tasks-1, fn task_id ->
+          # we shift the start index by the number of rows already consummed
+          iota_rows =
+            Nx.iota({rows_per_task}, type: :u16)
+            |> Nx.add(task_id * rows_per_task)
+            |> Nx.vectorize(:rows)
+          # full width
+          iota_cols =
+            Nx.iota({w}, type: :u16)
+            |> Nx.vectorize(:cols)
+          cross_product = Nx.stack([iota_rows, iota_cols])
+          
+          Nx.Defn.jit_apply(fn t ->
+            computed_rows = compute_half(t, opts) 
+            {task_id, computed_rows}
+            end, 
+            [cross_product]
+          )
+          end, timeout: :infinity, compiler: EXLA, max_concurrency: cpus
+        )
+        |> Stream.map(fn {:ok, {t_task_id, t}} -> 
+            {Nx.to_number(t_task_id), t} 
+          end)
+        |> Enum.sort(fn {x,_}, {y,_} -> x<= y end)
+        |> Enum.map(&(elem(&1, 1)))
+        |> Nx.stack()
+        |> Nx.devectorize()
+
+      flah_tensor =
+        Nx.tensor(half_tensor, names: [:cpus, :rows, :cols, :rgbs])
+        |> Nx.reverse(axes: [:cpus, :rows])
+
+      Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({nb_tasks *rows_per_task*2, w, 3})
+  end
+  
 end
 ```
 
@@ -471,18 +537,27 @@ We get the expected performance boost.
 > For the fun, we changed the colour palette.
 
 ```elixir
-h = 600; w =700;
+h = 1200; w =1400;
 
-StreamMandelbrot.run( %{h: h, w: w, max_iter: 200})
+StreamMandelbrot.run( %{h: h, w: w, max_iter: 100})
 |> Kino.Image.new()
 ```
 
 When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
 
 ```elixir
-h = 600; w = 700;
+h = 1200; w =1400;
 
-StreamMandelbrot.sym( %{h: h, w: w, max_iter: 200})
+StreamMandelbrot.sym( %{h: h, w: w, max_iter: 100})
+|> Kino.Image.new()
+```
+
+The most performant when the number of pixel increases is when we fix the number of rows and spawn processes accordingly.
+
+```elixir
+h = 1200; w =1400;
+
+StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 100})
 |> Kino.Image.new()
 ```
 
@@ -657,10 +732,10 @@ We run the Zig code. It returns a binary that we are able to consume with `Nx` a
 To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic.
 
 ```elixir
-h = w = 5_000
-max_iter = 300;
+h = 1000; w = 1200
+max_iter = 200;
 
-Zigit.generate_mandelbrot(h, w, max_iter)
+Zigit.generate_mandelbrot(w, h, max_iter)
 |> Nx.from_binary(:u8)
 |> Nx.reshape({h, w, 3})
 |> Kino.Image.new()
