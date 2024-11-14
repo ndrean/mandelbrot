@@ -47,7 +47,7 @@ defmodule Plot do
   defn point(cx,cy), do: cx + i() * cy
   
   def to_js(cx, cy, imax) do
-    c = point(cx,cy) |> dbg()
+    c = point(cx,cy)
     {_, t_nb, t, _} = Orbit.calc(c, n: imax) 
 
     nb = Nx.to_number(t_nb)
@@ -84,7 +84,7 @@ defmodule LiveOrbit do
 
   @impl true
   def init(html, ctx) do
-    ctx = assign(ctx, %{data: [], imax: 200})
+    ctx = assign(ctx, %{imax: 150})
     {:ok, assign(ctx, html: html)}
   end
 
@@ -110,7 +110,6 @@ defmodule LiveOrbit do
     """
     export function init(ctx, html) {
       ctx.root.innerHTML = html;
-      console.log("loaded");
 
       const canvas = document.getElementById("myCanvas");
       const canvasCtx = canvas.getContext("2d");
@@ -156,8 +155,6 @@ defmodule LiveOrbit do
       canvasCtx.stroke();
 
       // Draw grid dynamically based on min/max X/Y
-      //const gridStepX = (maxX - minX) / 10; // Divide the X range into 10 grid lines
-      //const gridStepY = (maxY - minY) / 10; // Divide the Y range into 10 grid lines
       const gridStep = 0.2;
       canvasCtx.strokeStyle = '#ccc';
       canvasCtx.setLineDash([2, 4]);
@@ -168,7 +165,6 @@ defmodule LiveOrbit do
         canvasCtx.moveTo(canvasX, 0);
         canvasCtx.lineTo(canvasX, canvasHeight);
         canvasCtx.stroke();
-        canvasCtx.setLineDash([]);
       }
       for (let y = minY; y <= maxY; y += gridStep) {
         const { y: canvasY } = toCanvasCoord(0, y);
@@ -176,19 +172,16 @@ defmodule LiveOrbit do
         canvasCtx.moveTo(0, canvasY);
         canvasCtx.lineTo(canvasWidth, canvasY);
         canvasCtx.stroke();
-        canvasCtx.setLineDash([]);
       }
     
       canvasCtx.setLineDash([]);
 
 
-      //---------- send click position ------------------------
-    
+      //---------- client event: send click position --------------------
       canvas.addEventListener("click", (e) => {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        console.log("click event", x,y)
         const { x: complexX, y: complexY } = toComplexCoord(x, y);
         coordsElement.textContent = `${complexX.toFixed(2)}, ${complexY.toFixed(2)}`;
     
@@ -196,45 +189,46 @@ defmodule LiveOrbit do
         ctx.pushEvent("clicked", {x: Number(complexX), y: Number(complexY)})
       });
 
-      //----------- receive computed points from server ---------
-      // callback from server event "broadcast"
-      ctx.handleEvent("points", drawPointsWithAnimation)
-
+      //----------- callbacks from server after computations--------------
       ctx.handleEvent("number", ({nb}) => {iterationNumber.textContent = nb});
+      ctx.handleEvent("points", drawPointsWithAnimation)
 
       // Draw each point with animation
       function drawPointsWithAnimation({data: points}) {
         let index = 0;
+        // loop with "setInterval"
         const intervalId = setInterval(() => {
           if (index >= points.length) {
             clearInterval(intervalId); // Stop the animation when all points are drawn
             return;
           }
-      
-          // Convert complex point to canvas coordinates
-          const point = toCanvasCoord(points[index][0], points[index][1]);
-          
-          // Draw the point as a small circle
-          canvasCtx.beginPath();
-          const radius = index === 0 ? 6 : 3;
-          canvasCtx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
-          canvasCtx.fillStyle = index === 0 ? "green" : 'red';
-          canvasCtx.fill();
-      
-          // Draw a dotted line connecting to the previous point, if exists
-          if (index > 0) {
-            const prevPoint = toCanvasCoord(points[index - 1][0], points[index - 1][1]);
-            canvasCtx.beginPath();
-            canvasCtx.moveTo(prevPoint.x, prevPoint.y);
-            canvasCtx.lineTo(point.x, point.y);
-            canvasCtx.strokeStyle = 'blue';
-            canvasCtx.setLineDash([5, 5]); // Creates a dotted line
-            canvasCtx.lineWidth = 1;
-            canvasCtx.stroke();
-            canvasCtx.setLineDash([]); // Reset line dash
-          }
+          animatePoint(points, index)
           index++;
-        }, 50); // 500 ms delay between each point
+        }, 100); 
+      }
+
+      function animatePoint(points, index) {
+        const currPoint = toCanvasCoord(points[index][0], points[index][1])
+
+        // Draw the point as a small circle
+        canvasCtx.beginPath();
+        const radius = index === 0 ? 6 : 3;
+        canvasCtx.arc(currPoint.x, currPoint.y, radius, 0, 2 * Math.PI);
+        canvasCtx.fillStyle = index === 0 ? "green" : 'red';
+        canvasCtx.fill();
+    
+        // Draw a dotted line connecting to the previous point, if exists
+        if (index > 0) {
+          const prevPoint = toCanvasCoord(points[index - 1][0], points[index - 1][1]);
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(prevPoint.x, prevPoint.y);
+          canvasCtx.lineTo(currPoint.x, currPoint.y);
+          canvasCtx.strokeStyle = 'blue';
+          canvasCtx.setLineDash([5, 5]); // Creates a dotted line
+          canvasCtx.lineWidth = 1;
+          canvasCtx.stroke();
+          canvasCtx.setLineDash([]); // Reset line dash
+        }
       }
     }
     """
