@@ -356,7 +356,7 @@ If you want to simply evaluate, set low values `h = w = 300` and `max_iter = 100
 
 ```elixir
 h = 600; w = 700
-Mandelbrot.compute(h: h, w: w, max_iter: 200)
+Mandelbrot.compute(h: h, w: w, max_iter: 100)
 |> Kino.Image.new()
 ```
 
