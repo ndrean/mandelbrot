@@ -231,32 +231,6 @@ end
 
 ```
 
-**Examples**:
-
-```elixir
-import Nx.Constants, only: [i: 0]
-
-st  = Nx.add(0.2, Nx.dot(i(), 0.2))
-dv1 = Nx.add(0.4, Nx.dot(i(), 0.4))
-dv2 = Nx.add(0.3, Nx.dot(i(), 0.6))
-dv3 = Nx.add(2, Nx.dot(i(), 2))
-
-
-iter_max = 100
-
-iter_dv1 = Orbit.number(dv1, iter_max) #<- we should find 9 iterations before z_n escapes from the disk 2
-iter_dv2 = Orbit.number(dv2, iter_max) #<- we should find 15 iterations before z_n escapes from the disk 2
-iter_dv3 = Orbit.number(dv3, iter_max)
-iter_st  = Orbit.number(st, iter_max) #<- this point is stable and the loop reaches n interations.
-
-%{
-  "unstable/2:    #{Nx.to_number(dv2)}" => iter_dv2 |> Nx.to_number(),
-  "unstable/1:    #{Nx.to_number(dv1)}" => iter_dv1 |> Nx.to_number(),
-  "out_of_disk2:  #{Nx.to_number(dv3)}" => iter_dv3 |> Nx.to_number(),
-  "stable:        #{Nx.to_number(st)}" => iter_st |> Nx.to_number(),
-}
-```
-
 ## Some colour palettes
 
 Each **iteration number** is an integer `n`. We want to associate a colour [r(n),g(n),b(n)].
