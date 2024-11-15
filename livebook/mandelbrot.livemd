@@ -72,9 +72,7 @@ The sets of these iterates of `c` is called its _orbit_ .
 defmodule Simple do
   def p(x,c), do: x**2 + c
 
-  # initial value
-  def iterate(1,c), do: c
-  # the n-th step
+  def iterate(0,c), do: c
   def iterate(n,c), do: p(iterate(n-1, c), c)
 end
 ```
@@ -112,7 +110,7 @@ gives:
 
 In the examples above, we took a simple "real" number.
 
-For the Mandelbrot set, we use the complex representation of a point: `(x,y) -> x + y*i` where `i` is the imaginary number (`i * i = -1`).
+For the Mandelbrot set, we use the complex representation of a point: `(x,y) -> x + y*i` where `i` is the imaginary number, `Nx.Constants.i`.
 
 So, each pixel `(i,j)` is mapped to a complex number `c = projection(i,j)`, and we want to evaluate how do the iterates of `c` behave under this iteration starting at `z0 = 0`.
 
