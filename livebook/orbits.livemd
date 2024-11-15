@@ -1,4 +1,4 @@
-# Mandelbrot orbits with Nx
+# Mandelbrot orbits with Nx and Kino.Live.JS
 
 ```elixir
 Mix.install(
@@ -14,6 +14,19 @@ Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 
 ## Orbit number
 
+We return a tensor consisting of each iterates (points) of a given point $c$ under the map:
+
+$p: z \mapsto z^2 +c$
+
+starting at $p(0)=c$.
+
+We allocate a tensor $t_0$ of length $n$, the max number of calculated iterates with $t_0=[c,0,\dots]$
+
+At each step:
+
+* while the squared norm of the iterate is less than 4 and max iterates is not reached, we add the iterate to the tensor,
+* else we stop.
+
 ```elixir
 defmodule Orbit do
   import Nx.Defn
@@ -25,19 +38,19 @@ defmodule Orbit do
   defn calc(c, opts) do
     n = opts[:n]
 
-    while { i=1, _nb=0, t=Nx.broadcast(c,{n}),c }, Nx.less(i,n) do
-      cond do
-        Nx.greater(sq_norm(t[i-1]), 4) ->
-          {n, i-1, t, c}
-        true ->
-        { i + 1, i, Nx.indexed_put(t, Nx.stack([i]), p(t[i-1], c)),c }
-      end
+    t0 = Nx.broadcast(0, {n}) |> Nx.put_slice([0], Nx.reshape(c, {1}))
+      
+    while {i=0, t=t0, c, n}, Nx.less(i,n) and Nx.less(sq_norm(t[i]), 4) do
+      t_i_plus_1 = Nx.indexed_put(t, Nx.stack([i+1]), p(t[i], c))
+      {i+1, t_i_plus_1, c, n}
     end
   end
 end
 ```
 
 ## Plotting orbits
+
+Given a point $c$, we return a tuple `{interation_number, [[x_0,y_0], [x_1,y_1],...}` for the `Kino.Live.JS` to send it to the Javascript to plot it.
 
 ```elixir
 defmodule Plot do
@@ -48,9 +61,9 @@ defmodule Plot do
   
   def to_js(cx, cy, imax) do
     c = point(cx,cy)
-    {_, t_nb, t, _} = Orbit.calc(c, n: imax) 
+    {t_nb, t, _, _} = Orbit.calc(c, n: imax) 
 
-    nb = Nx.to_number(t_nb)
+    nb = Nx.to_number(t_nb) - 1
     
     data = 
       t[0..nb]
@@ -62,9 +75,15 @@ defmodule Plot do
 end
 ```
 
-The module below is a `Kino.Js.Live` module to interact between the browser and teh Livebook as a server. It will draw  2D plan with a grid.
+The module below is a `Kino.Js.Live` module to interact between the browser and the Livebook as a server.
 
-When you click on the plan, we calculate the points of the orbit and display them with a little animation.
+When you click on the 2D plan, it will plot teh orbit of this point.
+
+More precisely, when you click on the plan:
+
+* the browser sends the coordinates to `Kino.Live.JS` (modulo a transformation canvas to 2D-plan),
+* the `Kino.Live.JS` server calls the `Plot.point` module that calculates the orbit (via `Orbit.calc`)
+* then `Kino.Live.JS` sends the reuslt to the browser to plot it with a little animation.
 
 The client server communication uses the primitives `handle_event` and `broadcast` server side, and `pushEvent` and `handleEvent` clent side.
 
@@ -75,8 +94,8 @@ defmodule LiveOrbit do
 
   def canvas() do
     """
-    <canvas id="myCanvas" width="800" height="800"></canvas>
-    <p>Clicked point coordinates: <span id="coordinates"></span> &nbsp, Iteration number: <span id="number"></span></p>
+    <p>Clicked point: <span id="coordinates"></span>, &nbsp Iteration number: <span id="number"></span></p>
+    <canvas id="myCanvas" width="800" height="600"></canvas>
     """
   end
 
@@ -98,6 +117,7 @@ defmodule LiveOrbit do
   def handle_event("clicked",  %{"x"=> x, "y" => y} = _evt, ctx) do
     %{assigns: %{imax: imax}} = ctx
     {nb, data} = Plot.to_js(x, y, imax)
+    # Nx.to_list(data) |> dbg()
     
     # send data to the client
     broadcast_event(ctx, "points", %{data: data})
@@ -195,6 +215,7 @@ defmodule LiveOrbit do
 
       // Draw each point with animation
       function drawPointsWithAnimation({data: points}) {
+        console.log(points)
         let index = 0;
         // loop with "setInterval"
         const intervalId = setInterval(() => {
@@ -236,7 +257,7 @@ defmodule LiveOrbit do
 end
 ```
 
-You can visualize the orbits of any point by clicking into the plot below. It will display the sequence and the ieration number.
+You can visualize the orbits of any point by clicking into the plot below.
 
 ```elixir
 LiveOrbit.run()

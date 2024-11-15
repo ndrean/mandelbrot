@@ -198,7 +198,7 @@ How does this work?
 * If it is bounded, we get `max_iter`, otherwise a lower value.
 
 We cannot use the recursion form we did earlier because numerical functions don't accept several headers as plain Elixir.
-Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond`, and also the double condition managed by `Nx.logical_and`. In this context, `true` is the tensor `1`.
+Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond`. In this context, `true` is the tensor `1`.
 
 ```elixir
 defmodule Orbit do
@@ -221,7 +221,7 @@ defmodule Orbit do
       # evaluate each point as it can be bounded or not in the disk 2
       1 ->
           {i, _, _} =
-            while {i=max_iter, z=c, c}, Nx.logical_and(Nx.greater(i,1), Nx.less(sq_norm(z), 4)) do
+            while {i=max_iter, z=c, c}, Nx.greater(i,1) and Nx.less(sq_norm(z), 4) do
                 {i-1, poly(z,c), c}
             end
           max_iter - i + 1
@@ -329,7 +329,7 @@ Depending on your machine, the computation below can be lengthy.
 If you want to simply evaluate, set low values `h = w = 300` and `max_iter = 100`.
 
 ```elixir
-h = 600; w = 700
+h = 300; w = 400
 Mandelbrot.compute(h: h, w: w, max_iter: 100)
 |> Kino.Image.new()
 ```
@@ -512,6 +512,7 @@ We get the expected performance boost.
 
 ```elixir
 h = 1200; w =1400;
+h = 300; w = 400
 
 StreamMandelbrot.run( %{h: h, w: w, max_iter: 100})
 |> Kino.Image.new()
@@ -521,6 +522,7 @@ When we use the "symmetrized" version, we have an extra boost as we calculate on
 
 ```elixir
 h = 1200; w =1400;
+h = 300; w = 400;
 
 StreamMandelbrot.sym( %{h: h, w: w, max_iter: 100})
 |> Kino.Image.new()
@@ -887,4 +889,4 @@ Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":31537,"stamp":{"token":"XCP.hfAK2AohEGCsrTVn9DFRLQeZr2d8nm1NcAy6ksA36JjqlXNFDPtVT-UWwlCqonkMp9rHfgKchAWkp7xUEU0t_IlQvQQG9q79cXJkaQ","version":2}} -->
+<!-- livebook:{"offset":30605,"stamp":{"token":"XCP.2zxx_MMrKnQXz7JSNXONttWUcrUNt58MBNGCaeZYLZ0yreUaSsH3ntAY2JPv8EU3ILKrbPtnONZ2owkS_tsLj6tVkFSPjtJxdhzyhhqHVPbixNXvkg-gld2JiZbV1DloOG0o8PvDzIF7E0nOkojFT2jo-llcGYHg-0AB","version":2}} -->
