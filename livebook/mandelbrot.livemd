@@ -25,6 +25,20 @@ This means you can't run the very last module where we use inline `Zig` code.
 # :observer.start()
 ```
 
+### Table of contents
+
+1. [Introduction](#introduction)
+2. [Play with orbits](#play-with-orbits)
+3. [Complex calculus](#complex-calculus)
+4. [Algorithm](#algorithm)
+5. [Orbit and iteration number](#orbit-and-iteration-number)
+6. [Some colour palettes](#some-colour-palettes)
+7. [Computing Mandelbrot set](#computing-the-mandelbrot-set)
+8. [Parallelise it](#parallelise-it)
+9. [Zoom in and out](zoom-in-and-out)
+10. [Speed up with Zig embedded code](#speed-up-with-zig-embedded-code)
+11. [Zoom-in-with-Zig](#zoom-in-with-zig)
+
 ## Introduction
 
 We want to produce an image that represents the beautiful **Mandelbrot set**. With one module below, you can zoom into the fractal.
@@ -128,9 +142,10 @@ If it escapes, meaning one iterate has a norm greater than 2, then we calculate 
 
 If we inspect the orbits, we discover ncie figures. The Livebook below lets you play with the plan and displays orbits on-click.
 
-/Users/nevendrean/Desktop/Screenshot 2024-11-14 at 19.22.38.png
+## Play with orbits
 
 Livebook to compute orbits:
+
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)
 
 <!-- livebook:{"break_markdown":true} -->
@@ -452,8 +467,8 @@ We can transform the binary into RGBA and display it into the canvas by building
 defmodule Zoom do
   import Nx.Defn
 
-  @h 800
-  @w 1100
+  @h 400 #800
+  @w  500 #1100
   @imax 150
   @rows_per_task 20
 
@@ -590,8 +605,6 @@ defmodule Zoom do
           max_y: newCenterY + newHeight / 2
         };
       }
-
-      let startc = undefined;
     
       // received from server -----------------------------------
       ctx.handleEvent("new", ([_, binary]) => {
@@ -613,17 +626,13 @@ defmodule Zoom do
         const imageData = new ImageData(imageDataArray, canvasWidth, canvasHeight);
       
         // Render the image onto the canvas
-        
         createImageBitmap(imageData).then(bitmap => canvasCtx.drawImage(bitmap, 0, 0))
-        const endc = performance.now()
-        console.log("time first: ", endc - start_first);
           
       });
 
       // push from browser -------------------------------------
       canvas.addEventListener("click", (e) => {
-        startc = performance.now();
-        if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
+        //if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
@@ -640,7 +649,6 @@ defmodule Zoom do
 
       // compute all cartesians coordinntes in the current canvas
       function getPoints(bounds) {
-        const startp = performance.now()
         const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
         const floatArray = new Float32Array(buffer);
 
@@ -655,12 +663,9 @@ defmodule Zoom do
           floatArray[n * 2 + 1] = y;
         }
         return buffer;
-        const endp = performance.now();
-        console.log("time to points", endp - startp);
       }
 
       // first render---------------
-      const start_first = performance.now()
       const buffer = getPoints(boundary)
       ctx.pushEvent("clicked", [{}, buffer])
     }
@@ -857,7 +862,7 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-## More Zig: Misiurewicz point
+## Misiurewicz point
 
 ```elixir
 defmodule Mand do
@@ -1029,4 +1034,318 @@ Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":34887,"stamp":{"token":"XCP.8YVK2HxvbB78vAaJdt3AtBbWfIsVSVUMZe90ikXWRAgUmZ_Y9nbgyUrwy_4qSN7zRLTF4pNEE9hKHdj2rIL8Emb_QXfAEcJO2lw_XADaP6Nhz30iCxA0OeoD7nj9ywoGFobJUY4HNoqyOrKvBYZq07_FQ8l8pGWW6ATU","version":2}} -->
+## Zoom in with Zig
+
+You can `CLICK` into the image and explore with the power of Zig.
+
+```elixir
+defmodule ZigSpeed do
+  use Zig, otp_app: :zigler,
+    #nifs: [..., generate_view],
+    release_mode: :fast
+
+
+  ~Z"""
+  const beam = @import("beam");
+  const std = @import("std");
+    
+  const print = std.debug.print;
+    
+  const Point = struct { x: f32, y: f32 };
+  const point_size: usize = @sizeOf(Point);
+
+  const Progress = struct {
+    points_processed: usize,
+    total_points: usize,
+    elapsed_ms: u64,
+  };
+  
+    
+  // / nif: generate_view
+  pub fn generate_view(data: [*]const u8, len: u32, imax: usize) !beam.term {
+    if (len < @sizeOf(Point)) {
+      return error.BufferTooSmall;
+    }
+
+    // Ensure the length is a multiple of point size
+    if (len % @sizeOf(Point) != 0) {
+        return error.InvalidBufferLength;
+    }
+    const start_time = std.time.milliTimestamp();
+  
+    // pointer the BEAM memory
+    const raw_buffer = data[0..len];
+
+    // Calculate how many points we expect
+    const nb_points: usize = len / (@sizeOf(f32) * 2);
+
+    // Create a slice of f32 values (two per point)
+    const float_slice = std.mem.bytesAsSlice(f32, raw_buffer);
+
+    const colours = try beam.allocator.alloc(u8, nb_points * 4);
+    defer beam.allocator.free(colours);
+
+    var i: usize = 0;
+    var color_idx: usize = 0;
+    while (i < float_slice.len) : (i += 2) {
+      if (i + 1 >= float_slice.len) break;
+      
+      const point = Point{
+          .x = float_slice[i],
+          .y = float_slice[i + 1],
+      };
+  
+      if (i % (float_slice.len / 10) == 0) {
+        const progress = Progress{
+            .points_processed = i / 2,
+            .total_points = nb_points,
+            .elapsed_ms = @intCast(std.time.milliTimestamp() - start_time),
+        };
+        printProgress(progress);
+      }
+
+      const iterNumber = iterationNumber(point, imax);
+      const rgba = createRgba(iterNumber, imax);
+
+      // Store colors
+      @memcpy(colours[color_idx..color_idx + 4], &rgba);
+      color_idx += 4;
+  
+      // Note: the @memcpy is equivalent to this....
+      //colours[color_idx] = rgba[0];
+      //colours[color_idx + 1] = rgba[1];
+      //colours[color_idx + 2] = rgba[2];
+      //colours[color_idx + 3] = rgba[3];
+      //color_idx += 4;
+    }
+
+    // For debugging
+    if (nb_points > 0) {
+      const first_point = Point{
+          .x = float_slice[0],
+          .y = float_slice[1],
+      };
+      std.debug.print("First point: x={d}, y={d}\n", .{
+          first_point.x,
+          first_point.y,
+      });
+    }
+  
+    return beam.make(colours, .{ .as = .binary });
+  }
+
+  fn iterationNumber(p: Point, imax: usize) ?usize {
+      if (p.x > 0.6 or p.x < -2.1) return null;
+      if (p.y > 1.2 or p.y < -1.2) return null;
+      // first cardiod
+      if ((p.x + 1) * (p.x + 1) + p.y * p.y < 0.0625) return null;
+  
+      var x2: f64 = 0;
+      var y2: f64 = 0;
+      var w: f64 = 0;
+  
+      for (0..imax) |j| {
+          if (x2 + y2 > 4) return j;
+          const x: f64 = x2 - y2 + p.x;
+          const y: f64 = w - x2 - y2 + p.y;
+          x2 = x * x;
+          y2 = y * y;
+          w = (x + y) * (x + y);
+      }
+      return null;
+  }
+
+  fn createRgba(iter: ?usize, imax: usize) [4]u8 {
+      // If it didn't escape, return black
+      if (iter == null) return [_]u8{ 0, 0, 0, 255 };
+  
+      if (iter.? < imax and iter.? > 0) {
+          const i = iter.? % 16;
+          return switch (i) {
+            0 => [_]u8{ 66, 30, 15, 255 },
+            1 => [_]u8{ 25, 7, 26, 255 },
+            2 => [_]u8{ 9, 1, 47, 255 },
+            3 => [_]u8{ 4, 4, 73, 255 },
+            4 => [_]u8{ 0, 7, 100, 255 },
+            5 => [_]u8{ 12, 44, 138, 255 },
+            6 => [_]u8{ 24, 82, 177, 255 },
+            7 => [_]u8{ 57, 125, 209, 255 },
+            8 => [_]u8{ 134, 181, 229, 255 },
+            9 => [_]u8{ 211, 236, 248, 255 },
+            10 => [_]u8{ 241, 233, 191, 255 },
+            11 => [_]u8{ 248, 201, 95, 255 },
+            12 => [_]u8{ 255, 170, 0, 255 },
+            13 => [_]u8{ 204, 128, 0, 255 },
+            14 => [_]u8{ 153, 87, 0, 255 },
+            15 => [_]u8{ 106, 52, 3, 255 },
+            else => [_]u8{ 0, 0, 0, 255 },
+          };
+      }
+      return [_]u8{ 0, 0, 0, 255 };
+  }
+
+  fn printProgress(progress: Progress) void {
+    const percentage = 
+      @as(f32, @floatFromInt(progress.points_processed)) / 
+                      @as(f32, @floatFromInt(progress.total_points)) * 100.0;
+    
+    const points_per_sec = 
+      if (progress.elapsed_ms > 0)
+        @as(f32, @floatFromInt(progress.points_processed)) / 
+          (@as(f32, @floatFromInt(progress.elapsed_ms)) / 1000.0)
+    else
+        0.0;
+    
+    std.debug.print("\rProgress: {d:.1}% ({d} pts/sec)", .{
+        percentage,
+        @as(u32, @intFromFloat(points_per_sec)),
+    });
+  }
+  """
+end
+
+defmodule KinoZig do
+  use Kino.JS
+  use Kino.JS.Live
+
+  @h 1500
+  @w 2000
+  @imax 250
+  #@rows_per_task 20
+
+  def canvas(h, w) do
+    """
+    <canvas id="myCanvas" width=#{w} height=#{h}></canvas>
+    """
+  end
+
+  def start(), do: Kino.JS.Live.new(__MODULE__, canvas(@h, @w))
+
+  @impl true
+  def init(html, ctx) do
+    ctx = assign(ctx, %{max_iter: @imax, h: @h, w: @w})
+    {:ok, assign(ctx, html: html)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  @impl true
+  def handle_event("clicked", {:binary,%{"length" => length}, buffer}, %{assigns: assigns} = ctx) do
+    %{h: _h, w: _w, max_iter: max_iter} = assigns
+    IO.inspect({length, length == byte_size(buffer)}, label:  "length: ")
+    colours = ZigSpeed.generate_view(buffer, length, max_iter)
+      
+    broadcast_event(ctx,"new", {:binary, %{}, colours})
+    {:noreply, ctx}
+  end
+
+  
+  asset "main.js" do
+    """
+    export function init(ctx, html) {
+      ctx.root.innerHTML = html;
+
+      const canvas = document.getElementById("myCanvas");
+      const canvasCtx = canvas.getContext("2d");
+      const canvasWidth = canvas.width, canvasHeight = canvas.height;
+    
+      // initial bounds
+      let boundary = {min_x: -2, max_y: 1, max_x: 1, min_y: -1};
+
+      // Function to convert canvas coordinate to complex coordinate
+      function toCartesian(canvasX, canvasY, bounds) {
+        const {min_x, max_x, min_y, max_y} = bounds;
+        const x = min_x + (canvasX / (canvasWidth-1)) * (max_x - min_x);
+        const y = max_y - (canvasY / (canvasHeight-1)) * (max_y - min_y);
+        return { x, y };
+      }
+
+      function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
+        // Get the clicked point's corresponding 2D plane coordinates
+        const { x: newCenterX, y: newCenterY } = toCartesian(canvasX, canvasY, bounds)
+        const { zoomRatio = 5, zoomIn = true} = options;
+
+        const {min_x, max_x, min_y, max_y} = bounds;
+        // Compute the width and height of the new zoomed rectangle
+        const oldWidth = max_x - min_x;
+        const oldHeight = max_y - min_y;
+
+        const factor = zoomIn ? 1/zoomRatio : zoomRatio;
+        const newWidth = oldWidth * factor;
+        const newHeight = oldHeight * factor;
+      
+        return { 
+          min_x: newCenterX - newWidth / 2,
+          max_x: newCenterX + newWidth / 2, 
+          min_y: newCenterY - newHeight / 2, 
+          max_y: newCenterY + newHeight / 2
+        };
+      }
+    
+      // received from server -----------------------------------
+      ctx.handleEvent("new", ([_, binary]) => {
+        console.log("new")
+        const imageData = new ImageData(
+          new Uint8ClampedArray(binary), 
+          canvasWidth, 
+          canvasHeight
+        );
+  
+        // Render to canvas
+        createImageBitmap(imageData).then(bitmap => canvasCtx.drawImage(bitmap, 0, 0));
+      });
+          
+
+      // push from browser -------------------------------------
+      canvas.addEventListener("click", (e) => {
+        //if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
+    
+        //-- send data to the server -->
+        Object.assign(boundary, newBounds);
+        const buffer = getPoints(boundary)
+        console.log(buffer.byteLength)
+        ctx.pushEvent("clicked", [{length: buffer.byteLength}, buffer])
+      });
+
+      
+
+
+      // compute all cartesians coordinntes in the current canvas
+      function getPoints(bounds) {
+        const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
+        const floatArray = new Float32Array(buffer);
+
+        let index = 0;
+        for (let n = 0; n < canvasWidth * canvasHeight; n++) {
+          const { x, y } = toCartesian(
+              n % canvasWidth,              // i
+              Math.floor(n / canvasWidth),  // j
+              bounds
+          );
+          floatArray[n * 2] = x;
+          floatArray[n * 2 + 1] = y;
+        }
+        return buffer;
+      }
+
+      // first render---------------
+      const buffer = getPoints(boundary)
+      ctx.pushEvent("clicked", [{length: buffer.byteLength}, buffer])
+    }
+    """
+  end
+end
+```
+
+```elixir
+KinoZig.start()
+```
+
+<!-- livebook:{"offset":44300,"stamp":{"token":"XCP.abDJvGeTy0Spc72a9UjQnfAXg9-X-cJM20fYiamFy8FTNEjpWYobxIe3lw-X7Jz4YUoFTa667A4o6wDtrC4a5RoLXKayisyNBkU6K90NOUIxcJFz_r8uy34GJc9xxH0npHVaHktj4YAAWC6XXdOxFMPGgfxSPPC2_Dkc","version":2}} -->
