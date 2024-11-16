@@ -22,12 +22,12 @@ If you run into an error above, this means that you don't have Zig. Comment the 
 This means you can't run the very last module where we use inline `Zig` code.
 
 ```elixir
-:observer.start()
+# :observer.start()
 ```
 
 ## Introduction
 
-We want to produce an image that represents the beautiful **Mandelbrot set**
+We want to produce an image that represents the beautiful **Mandelbrot set**. With one module below, you can zoom into the fractal.
 
 Source: <https://en.wikipedia.org/wiki/Mandelbrot_set>
 
@@ -209,7 +209,8 @@ defmodule Orbit do
   # for speed, we don't use the norm (square root involved), only the square of the norm
   defn sq_norm(z), do: Nx.real(Nx.conjugate(z) * z)
 
-  defn number(c,max_iter) do
+  defn number(c,opts) do
+    max_iter = opts[:imax]
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
     cond do
       # points in first cardioid are all stable. Save on iterations
@@ -267,22 +268,22 @@ defmodule Colour do
     v = Nx.remainder(n,16)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
-      Nx.equal(v,0) -> Nx.stack([66, 30, 15]) |> Nx.as_type(:u8)
-      Nx.equal(v,1) -> Nx.stack([25, 7, 26]) |> Nx.as_type(:u8)
-      Nx.equal(v,2) -> Nx.stack([9, 1, 47]) |> Nx.as_type(:u8)
-      Nx.equal(v,3) -> Nx.stack([4, 4, 73]) |> Nx.as_type(:u8)
-      Nx.equal(v,4) -> Nx.stack([0, 7, 100]) |> Nx.as_type(:u8)
-      Nx.equal(v,5) -> Nx.stack([12, 44, 138]) |> Nx.as_type(:u8)
-      Nx.equal(v,6) -> Nx.stack([24, 82, 177]) |> Nx.as_type(:u8)
-      Nx.equal(v,7) -> Nx.stack([57, 125, 209]) |> Nx.as_type(:u8)
-      Nx.equal(v,8) -> Nx.stack([134, 181, 229]) |> Nx.as_type(:u8)
-      Nx.equal(v,9) -> Nx.stack([211, 236, 248]) |> Nx.as_type(:u8)
-      Nx.equal(v,10) -> Nx.stack([241, 233, 191]) |> Nx.as_type(:u8)
-      Nx.equal(v,11) -> Nx.stack([248, 201, 95]) |> Nx.as_type(:u8)
-      Nx.equal(v,12) -> Nx.stack([255, 170, 0]) |> Nx.as_type(:u8)
-      Nx.equal(v,13) -> Nx.stack([204, 128, 0]) |> Nx.as_type(:u8)
-      Nx.equal(v,14) -> Nx.stack([153, 87, 0]) |> Nx.as_type(:u8)
-      Nx.equal(v,15) -> Nx.stack([106, 52, 3]) |> Nx.as_type(:u8)
+      Nx.equal(v,0) -> Nx.stack([66, 30, 15]) 
+      Nx.equal(v,1) -> Nx.stack([25, 7, 26]) 
+      Nx.equal(v,2) -> Nx.stack([9, 1, 47])
+      Nx.equal(v,3) -> Nx.stack([4, 4, 73]) 
+      Nx.equal(v,4) -> Nx.stack([0, 7, 100]) 
+      Nx.equal(v,5) -> Nx.stack([12, 44, 138]) 
+      Nx.equal(v,6) -> Nx.stack([24, 82, 177]) 
+      Nx.equal(v,7) -> Nx.stack([57, 125, 209]) 
+      Nx.equal(v,8) -> Nx.stack([134, 181, 229]) 
+      Nx.equal(v,9) -> Nx.stack([211, 236, 248]) 
+      Nx.equal(v,10) -> Nx.stack([241, 233, 191]) 
+      Nx.equal(v,11) -> Nx.stack([248, 201, 95]) 
+      Nx.equal(v,12) -> Nx.stack([255, 170, 0]) 
+      Nx.equal(v,13) -> Nx.stack([204, 128, 0]) 
+      Nx.equal(v,14) -> Nx.stack([153, 87, 0]) 
+      Nx.equal(v,15) -> Nx.stack([106, 52, 3]) 
       1 -> Nx.stack([0,0,0])
     end
   end
@@ -315,7 +316,7 @@ defmodule Mandelbrot do
     cross_product = Nx.stack([iota_rows, iota_cols])
 
     Pixel.map(cross_product,{h,w}, defining_points)
-      |> Orbit.number(max_iter)
+      |> Orbit.number(imax: max_iter)
       |> Colour.rgb(max_iter)
       |> Nx.devectorize()
       |> Nx.reshape({h, w, 3})
@@ -329,7 +330,7 @@ Depending on your machine, the computation below can be lengthy.
 If you want to simply evaluate, set low values `h = w = 300` and `max_iter = 100`.
 
 ```elixir
-h = 300; w = 400
+h = 400; w = 500
 Mandelbrot.compute(h: h, w: w, max_iter: 100)
 |> Kino.Image.new()
 ```
@@ -338,107 +339,17 @@ Mandelbrot.compute(h: h, w: w, max_iter: 100)
 
 When the resolution of the image increases, it is interesting to parallelise the computations.
 
-We divide the image in horizontal bands:
-
-* "per cpu": fix the numbers of "bands" to the number of CPU cores and spawn processes,
-* "per fixed rows": we fix the number of rows per process, and spawn as many tasks as needed.
+We divide the image in horizontal bands by fixing the numbers of rows. Then we spawn as many tasks as needed.
 
 > This is worth only if the size of the image is large enough as this comes with non negligible overhead.
 
-When we run "per cpu", the number of rows to compute per process varies. We use `Task.async_stream` and set `ordered: true` as we need to sum-up the results in an ordered manner.
-
-When we run "per fixed rows", we use `Task.async` and return the "task_id"  to be able to sort the result.
-
 Lastly, another possible optimisation is to remark that the image is symmetric when you compute the full image. You can compute half of the image and stack to it the reversed tensor. This gives an extra boost.
 
-The full computation is done in `StreamMandelbrot.run`.
-
-The "per cpu" + half computation is done in `StreamMandelbrot.sym`.
-
-The "per fixed rows" + half computation is done in `StreamMandelbrot.parall_sym`
+This is done in `StreamMandelbrot.parall_sym`
 
 ```elixir
 defmodule StreamMandelbrot do
   import Nx.Defn
-
-    #-------------------------------------------------------------------------
-    # spawn computations by "bands of rows", as many as CPU count.
-    #-------------------------------------------------------------------------
-    def run(%{h: h, w: w} = opts) do
-      cpus = :erlang.system_info(:logical_processors_available)
-      # we eliminate a few rows from the final image, #cpus at most.
-      h = h - rem(h,cpus)
-      rows_per_cpu = div(h, cpus)
-
-      Task.async_stream(0..cpus-1, fn cpu_count ->
-          # we shift the start index by the number of rows already consummed
-          iota_rows = Nx.iota({rows_per_cpu}, type: :u16) |> Nx.add(cpu_count * rows_per_cpu)|> Nx.vectorize(:rows)
-          # full width
-          iota_cols = Nx.iota({w}, type: :u16) |> Nx.vectorize(:cols)
-          cross_product = Nx.stack([iota_rows, iota_cols])
-          Nx.Defn.jit_apply(fn t ->
-            compute(t, opts) end, [cross_product])
-          end,
-          timeout: :infinity, ordered: true
-      )
-      |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
-      |> Nx.stack()
-      |> Nx.reshape({h,w,3})
-    end
-
-    defn compute(cross_product, %{h: h, w: w, max_iter: max_iter}) do
-      top_left_x = -2; top_left_y = 1.2; bottom_right_x = 0.6; bottom_right_y = -1.2;
-      defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
-
-      Pixel.map(cross_product,{h,w}, defining_points)
-      |> Orbit.number(max_iter)
-      |> Colour.rgb2(max_iter)
-      |> Nx.devectorize()
-      |> Nx.as_type(:u8)
-    end
-
-    #-------------------------------------------------------------------------
-    # compute half, and copy into the other half. Useful only for full image
-    #-------------------------------------------------------------------------
-    def sym(%{h: h, w: w} = opts) do
-      cpus = :erlang.system_info(:logical_processors_available)
-      # we eliminate a few rows from the final image, 8 at most.
-      half_h = div(h,2)
-      rem = rem(half_h, cpus)
-      half_new = half_h - rem
-      rows_per_cpu = div(half_new, cpus)
-      opts = Map.merge(opts, %{h: half_new })
-
-      half_tensor =
-        Task.async_stream(0..cpus-1, fn cpu_count ->
-          # we shift the start index by the number of rows already consummed
-          iota_rows =
-            Nx.iota({rows_per_cpu}, type: :u16)
-            |> Nx.add(cpu_count * rows_per_cpu)
-            |> Nx.vectorize(:rows)
-          # full width
-          iota_cols =
-            Nx.iota({w}, type: :u16)
-            |> Nx.vectorize(:cols)
-          cross_product = Nx.stack([iota_rows, iota_cols])
-          Nx.Defn.jit_apply(fn t ->
-            compute_half(t, opts) end, 
-            [cross_product]
-          )
-          end,
-          timeout: :infinity, ordered: true, compiler: EXLA
-        )
-        |> Enum.map(fn {:ok, t} -> t end) #&elem(&1, 1)
-        |> Nx.stack()
-        |> Nx.devectorize()
-
-
-      flah_tensor =
-        Nx.tensor(half_tensor, names: [:cpus, :rows, :cols, :rgbs])
-        |> Nx.reverse(axes: [:cpus, :rows])
-
-      Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({half_new *2, w, 3})
-    end
 
 
   # bottom_right_y = 0 <--- we computate only plane y>0
@@ -447,7 +358,7 @@ defmodule StreamMandelbrot do
     defining_points = {top_left_x, top_left_y, bottom_right_x, bottom_right_y}
 
     Pixel.map(cross_product,{h,w}, defining_points)
-    |> Orbit.number(max_iter)
+    |> Orbit.number(imax: max_iter)
     |> Colour.rgb2(max_iter)
     |> Nx.devectorize()
     |> Nx.as_type(:u8)
@@ -455,89 +366,318 @@ defmodule StreamMandelbrot do
 
   #--------------------------------------------------------------------------------
   # Fix the number of rows and spawn concurrently and compute half (for full image)
-  # need to check the row_id .compute half
   #--------------------------------------------------------------------------------
 
   def paral_sym(%{h: h, w: w} = opts) do
-    cpus = :erlang.system_info(:logical_processors_available)
     half_h = div(h,2)
     
     rows_per_task = 30
     half_new = half_h - rem(half_h, rows_per_task)
-    nb_tasks = div(half_new, rows_per_task) |> dbg()
+    nb_tasks = div(half_new, rows_per_task) 
     opts = Map.merge(opts, %{h: half_new })
+    {half_new, nb_tasks, rows_per_task, h} |> dbg()
 
-      half_tensor =
-        Task.async_stream(0..nb_tasks-1, fn task_id ->
-          # we shift the start index by the number of rows already consummed
-          iota_rows =
-            Nx.iota({rows_per_task}, type: :u16)
-            |> Nx.add(task_id * rows_per_task)
-            |> Nx.vectorize(:rows)
-          # full width
-          iota_cols =
-            Nx.iota({w}, type: :u16)
-            |> Nx.vectorize(:cols)
-          cross_product = Nx.stack([iota_rows, iota_cols])
-          
-          Nx.Defn.jit_apply(fn t ->
-            computed_rows = compute_half(t, opts) 
-            {task_id, computed_rows}
-            end, 
-            [cross_product]
-          )
-          end, timeout: :infinity, compiler: EXLA, max_concurrency: cpus
-        )
-        |> Stream.map(fn {:ok, {t_task_id, t}} -> 
-            {Nx.to_number(t_task_id), t} 
+      tasks_half_tensor =
+        for task_id <- 0.. nb_tasks-1 do
+          Task.async(fn -> 
+            iota_rows =
+              Nx.iota({rows_per_task}, type: :u16)
+              |> Nx.add(task_id * rows_per_task)
+              |> Nx.vectorize(:rows)
+            # full width
+            iota_cols =
+              Nx.iota({w}, type: :u16)
+              |> Nx.vectorize(:cols)
+            cross_product = Nx.stack([iota_rows, iota_cols])
+            
+            Nx.Defn.jit_apply(fn t ->
+              computed_rows = compute_half(t, opts) 
+              {task_id, computed_rows}
+              end, 
+              [cross_product]
+            )
           end)
-        |> Enum.sort(fn {x,_}, {y,_} -> x<= y end)
+        end
+
+      half_tensor =   
+        Task.await_many(tasks_half_tensor, :infinity)
+        |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
         |> Enum.map(&(elem(&1, 1)))
         |> Nx.stack()
         |> Nx.devectorize()
+          
 
       flah_tensor =
         Nx.tensor(half_tensor, names: [:cpus, :rows, :cols, :rgbs])
         |> Nx.reverse(axes: [:cpus, :rows])
 
-      Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({nb_tasks *rows_per_task*2, w, 3})
+      Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({half_new * 2, w, 3})
   end
   
 end
 ```
 
-We get the expected performance boost.
+We get the expected performance boost. We are able to incrase the resolution.
 
 > For the fun, we changed the colour palette.
 
 ```elixir
-h = 1200; w =1400;
-h = 300; w = 400
+h = 800; w = 1000
 
-StreamMandelbrot.run( %{h: h, w: w, max_iter: 100})
+StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 150})
 |> Kino.Image.new()
 ```
 
-When we use the "symmetrized" version, we have an extra boost as we calculate only half of the pixels. We can therefor increase the precision.
+## Zoom in and out
+
+In this module, we are able to click on a point of the image and zoom in and dive into the fractal.
+
+We pass __binary__ between the browser and the Livebook used as a server. This happens thanks to `Kino.JS.Live` who supports using binary data.
+
+Given some bounds of the 2D-plan within our canvas, we will pass "quantitized" coordinates of the 2D-plan. To each `(i,j)` of the canvas, we compute in the browser the "real" coordinates `(x,y)` and pass this as a binary to the Livebook. For example, when you have 600 x 800 points as floats (4 bytes per float for f32), we pass 600x800x2x4 = 3_840_000 = 3.8MB of data.
+
+> send the binary within an `ArrayBuffer` container, and allocate an `Float32Array` view.
+
+With `Nx.from_binary(binary, :f32)`, we can enter the `Nx` world. We parallelise the computations by running `Task.async` whe we chunk the rows, and reassemble the resulting tensors by the _task_id_ .
+
+We then send back to the browser the resulting tensor with `Nx.to_binary`, the size becomes 600x800x3 = 1.44MB. This is because we are sending now `u8` integers representing the R,G,B of each point.
+
+We don't want to use data as strings  (data:image base 64) as this increases the weight and thus slows down the rendering.
+
+We can transform the binary into RGBA and display it into the canvas by building an `ImageData`.
+
+> use the `Uint8Array` container and allocate an `Uint8ClampedArray` view. Then use the `ImageData` from the Canvas API and `window.createImageBitmap` to fill in the canvas.
 
 ```elixir
-h = 1200; w =1400;
-h = 300; w = 400;
+defmodule Zoom do
+  import Nx.Defn
 
-StreamMandelbrot.sym( %{h: h, w: w, max_iter: 100})
-|> Kino.Image.new()
+  @h 800
+  @w 1100
+  @imax 150
+  @rows_per_task 20
+
+  # Nx computations ------------------------------------
+  defn compute(slice, %{max_iter: max_iter}) do
+    Orbit.number(slice, imax: max_iter)
+    |> Colour.rgb2(max_iter)
+    |> Nx.devectorize()
+    |> Nx.as_type(:u8)
+  end
+
+  defn to_complex(t), do: Nx.complex(t[0], t[1])
+  # <--------------------------------------------------
+  
+  def consume(binary, %{h: h, w: w, max_iter: max_iter}) do
+    rows_per_task =  @rows_per_task
+    tmp_rem = rem(h, rows_per_task) 
+    rem = if tmp_rem == 0, do: rows_per_task, else: tmp_rem
+    nb_tasks = div(h, rows_per_task)
+    
+    opts =  %{max_iter: max_iter}
+
+    t = 
+      Nx.from_binary(binary, :f32) 
+      |> Nx.reshape({h, w, 2})
+      # we want to "complexify" the points thus we need to vectorize both dimensions
+      |> Nx.vectorize([:r, :c])
+      |> to_complex()
+      |> Nx.devectorize()
+
+    
+    computations = 
+      for task_id <- 0..nb_tasks do
+        Task.async(fn ->
+          # we shift the start index by the number of rows already consummed
+          start_row = task_id * rows_per_task
+          remaining_tasks = 
+            if task_id ==  (nb_tasks), do: min(rem, rows_per_task), else: rows_per_task
+          
+          slice = 
+            Nx.slice(t, [start_row, 0], [remaining_tasks, w]) |> Nx.vectorize([:row, :col])
+            
+          # apply our Nx pipeline to the slice
+          Nx.Defn.jit_apply(fn t ->
+            computed_rows = compute(t, opts) 
+            {task_id, computed_rows}
+            end, 
+            [slice]
+          )
+          end)
+      end
+      
+    Task.await_many(computations, :infinity)
+    # re-order as per the task_id we retunrned
+    |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
+    |> Enum.map(&(elem(&1, 1)))
+    |> Nx.stack()
+    |> Nx.devectorize()
+    # send to the browser as binary
+    |> Nx.to_binary()
+  end
+
+
+  # Kino.JS.Live ------------------------------------------------------
+  use Kino.JS
+  use Kino.JS.Live
+
+  def canvas(h, w) do
+    """
+    <canvas id="myCanvas" width=#{w} height=#{h}></canvas>
+    """
+  end
+
+  def start(), do: Kino.JS.Live.new(__MODULE__, canvas(@h, @w))
+
+  @impl true
+  def init(html, ctx) do
+    ctx = assign(ctx, %{max_iter: @imax, h: @h, w: @w})
+    {:ok, assign(ctx, html: html)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  @impl true
+  def handle_event("clicked", {:binary,_, buffer}, %{assigns: assigns} = ctx) do
+    %{h: h, w: w, max_iter: max_iter} = assigns
+    binary = consume(buffer, %{h: h, w: w, max_iter: max_iter})
+    broadcast_event(ctx,"new", {:binary, %{}, binary})
+    {:noreply, ctx}
+  end
+
+  
+  asset "main.js" do
+    """
+    export function init(ctx, html) {
+      ctx.root.innerHTML = html;
+
+      const canvas = document.getElementById("myCanvas");
+      const canvasCtx = canvas.getContext("2d");
+      const canvasWidth = canvas.width, canvasHeight = canvas.height;
+    
+      // initial bounds
+      let boundary = {min_x: -2, max_y: 1, max_x: 1, min_y: -1};
+
+      // Function to convert canvas coordinate to complex coordinate
+      function toCartesian(canvasX, canvasY, bounds) {
+        const {min_x, max_x, min_y, max_y} = bounds;
+        const x = min_x + (canvasX / (canvasWidth-1)) * (max_x - min_x);
+        const y = max_y - (canvasY / (canvasHeight-1)) * (max_y - min_y);
+        return { x, y };
+      }
+
+      function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
+        // Get the clicked point's corresponding 2D plane coordinates
+        const { x: newCenterX, y: newCenterY } = toCartesian(canvasX, canvasY, bounds)
+        const { zoomRatio = 5, zoomIn = true} = options;
+
+        const {min_x, max_x, min_y, max_y} = bounds;
+        // Compute the width and height of the new zoomed rectangle
+        const oldWidth = max_x - min_x;
+        const oldHeight = max_y - min_y;
+
+        const factor = zoomIn ? 1/zoomRatio : zoomRatio;
+        const newWidth = oldWidth * factor;
+        const newHeight = oldHeight * factor;
+      
+        return { 
+          min_x: newCenterX - newWidth / 2,
+          max_x: newCenterX + newWidth / 2, 
+          min_y: newCenterY - newHeight / 2, 
+          max_y: newCenterY + newHeight / 2
+        };
+      }
+
+      let startc = undefined;
+    
+      // received from server -----------------------------------
+      ctx.handleEvent("new", ([_, binary]) => {
+        console.log("new")
+        const rgbArray = new Uint8Array(binary);
+        const imageDataArray = new Uint8ClampedArray(
+          canvasWidth * canvasHeight * 4
+        ); // RGBA
+        
+        // Fill the Uint8ClampedArray with RGB data, add alpha channel
+        for (let i = 0, j = 0; i < rgbArray.length; i += 3, j += 4) {
+          imageDataArray[j] = rgbArray[i];     // R
+          imageDataArray[j + 1] = rgbArray[i + 1]; // G
+          imageDataArray[j + 2] = rgbArray[i + 2]; // B
+          imageDataArray[j + 3] = 255;         // Alpha (fully opaque)
+        }
+
+        // Create ImageData object
+        const imageData = new ImageData(imageDataArray, canvasWidth, canvasHeight);
+      
+        // Render the image onto the canvas
+        
+        createImageBitmap(imageData).then(bitmap => canvasCtx.drawImage(bitmap, 0, 0))
+        const endc = performance.now()
+        console.log("time first: ", endc - start_first);
+          
+      });
+
+      // push from browser -------------------------------------
+      canvas.addEventListener("click", (e) => {
+        startc = performance.now();
+        if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
+    
+        //-- send data to the server -->
+        Object.assign(boundary, newBounds);
+        const buffer = getPoints(boundary)
+        ctx.pushEvent("clicked", [{}, buffer])
+      });
+
+      
+
+
+      // compute all cartesians coordinntes in the current canvas
+      function getPoints(bounds) {
+        const startp = performance.now()
+        const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
+        const floatArray = new Float32Array(buffer);
+
+        let index = 0;
+        for (let n = 0; n < canvasWidth * canvasHeight; n++) {
+          const { x, y } = toCartesian(
+              n % canvasWidth,              // i
+              Math.floor(n / canvasWidth),  // j
+              bounds
+          );
+          floatArray[n * 2] = x;
+          floatArray[n * 2 + 1] = y;
+        }
+        return buffer;
+        const endp = performance.now();
+        console.log("time to points", endp - startp);
+      }
+
+      // first render---------------
+      const start_first = performance.now()
+      const buffer = getPoints(boundary)
+      ctx.pushEvent("clicked", [{}, buffer])
+    }
+    """
+  end
+end
 ```
 
-The most performant when the number of pixel increases is when we fix the number of rows and spawn processes accordingly.
+You can `CTRL+CLICK` to zoom into the point of your choice. The zoom factor is 10.
+
+You can dezoom with `CTRL+SHIFT+CLICK`.
 
 ```elixir
-h = 1200; w =1400;
-
-StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 100})
-|> Kino.Image.new()
+Zoom.start()
 ```
 
-## Run embedded Zig code
+## Speed up with Zig embedded code
 
 If we still need or want extra speed, we can also embed `Zig` code in `Elixir` within a Livebook.
 
@@ -889,4 +1029,4 @@ Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":30605,"stamp":{"token":"XCP.2zxx_MMrKnQXz7JSNXONttWUcrUNt58MBNGCaeZYLZ0yreUaSsH3ntAY2JPv8EU3ILKrbPtnONZ2owkS_tsLj6tVkFSPjtJxdhzyhhqHVPbixNXvkg-gld2JiZbV1DloOG0o8PvDzIF7E0nOkojFT2jo-llcGYHg-0AB","version":2}} -->
+<!-- livebook:{"offset":34887,"stamp":{"token":"XCP.8YVK2HxvbB78vAaJdt3AtBbWfIsVSVUMZe90ikXWRAgUmZ_Y9nbgyUrwy_4qSN7zRLTF4pNEE9hKHdj2rIL8Emb_QXfAEcJO2lw_XADaP6Nhz30iCxA0OeoD7nj9ywoGFobJUY4HNoqyOrKvBYZq07_FQ8l8pGWW6ATU","version":2}} -->
