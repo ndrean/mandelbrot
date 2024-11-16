@@ -54,7 +54,13 @@ This can be run in a Livebook.
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
 
-We can draw these kind of images. It is faster with the Zig embedded ocde and implemented at the end of the Livebook.
+We can draw these kind of images. 
+
+THere is a module where you can explore the fractal by clicking in (CTRL-click). 
+
+This happens thanks to `KinoJS.Live` as we pass binary between the browser and the Livebook used as a server.
+
+Furthermore, we use Zig embedded code and implemented at the end of the Livebook. It is 2 magnitude faster.
 
 <https://github.com/ndrean/mandelbrot/blob/main/livebook/mandelbrot.livemd>
 
