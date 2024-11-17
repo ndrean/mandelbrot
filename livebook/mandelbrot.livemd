@@ -19,7 +19,7 @@ Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ## Warning
 
 If you run into an error above, this means that you don't have Zig. Comment the package `Zigler` above.
-This means you can't run the very last module where we use inline `Zig` code.
+This means you can't run the last modules where we use inline `Zig` code.
 
 ```elixir
 # :observer.start()
@@ -29,15 +29,15 @@ This means you can't run the very last module where we use inline `Zig` code.
 
 1. [Introduction](#introduction)
 2. [Play with orbits](#play-with-orbits)
-3. [Complex calculus](#complex-calculus)
+3. [Def and Defn](#def-and-defn)
 4. [Algorithm](#algorithm)
 5. [Orbit and iteration number](#orbit-and-iteration-number)
 6. [Some colour palettes](#some-colour-palettes)
 7. [Computing Mandelbrot set](#computing-the-mandelbrot-set)
 8. [Parallelise it](#parallelise-it)
-9. [Zoom in and out](zoom-in-and-out)
-10. [Speed up with Zig embedded code](#speed-up-with-zig-embedded-code)
-11. [Zoom-in-with-Zig](#zoom-in-with-zig)
+9. [ExZoom in and out](#exzoom-in-and-out)
+10. [Zoom in with Zig](#zoom-in-with-zig)
+11. [Static image with Zig and Nx and Kino](#static-image-with-zig-and-nx-and-kino)
 
 ## Introduction
 
@@ -152,7 +152,7 @@ Livebook to compute orbits:
 
 ![](files/Screenshot-2024-11-14-at-19.22.38.jpeg)
 
-## Complex calculus
+## Def and Defn
 
 We will use two types of functions:
 
@@ -279,7 +279,7 @@ defmodule Colour do
     end
   end
 
-  defn rgb2(n, max_iter) do
+  defn rgb3(n, max_iter) do
     v = Nx.remainder(n,16)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
@@ -300,6 +300,30 @@ defmodule Colour do
       Nx.equal(v,14) -> Nx.stack([153, 87, 0]) 
       Nx.equal(v,15) -> Nx.stack([106, 52, 3]) 
       1 -> Nx.stack([0,0,0])
+    end
+  end
+
+  defn rgb4(n, max_iter) do
+    v = Nx.remainder(n,16)
+    cond do
+      Nx.equal(n, max_iter) -> Nx.stack([0,0,0, 255])
+      Nx.equal(v,0) -> Nx.stack([66, 30, 15, 255]) 
+      Nx.equal(v,1) -> Nx.stack([25, 7, 26, 255]) 
+      Nx.equal(v,2) -> Nx.stack([9, 1, 47, 255])
+      Nx.equal(v,3) -> Nx.stack([4, 4, 73, 255]) 
+      Nx.equal(v,4) -> Nx.stack([0, 7, 100, 255]) 
+      Nx.equal(v,5) -> Nx.stack([12, 44, 138, 255]) 
+      Nx.equal(v,6) -> Nx.stack([24, 82, 177, 255]) 
+      Nx.equal(v,7) -> Nx.stack([57, 125, 209, 255]) 
+      Nx.equal(v,8) -> Nx.stack([134, 181, 229, 255]) 
+      Nx.equal(v,9) -> Nx.stack([211, 236, 248, 255]) 
+      Nx.equal(v,10) -> Nx.stack([241, 233, 191, 255]) 
+      Nx.equal(v,11) -> Nx.stack([248, 201, 95, 255]) 
+      Nx.equal(v,12) -> Nx.stack([255, 170, 0, 255]) 
+      Nx.equal(v,13) -> Nx.stack([204, 128, 0, 255]) 
+      Nx.equal(v,14) -> Nx.stack([153, 87, 0, 255]) 
+      Nx.equal(v,15) -> Nx.stack([106, 52, 3, 255]) 
+      1 -> Nx.stack([0,0,0, 255])
     end
   end
 end
@@ -374,7 +398,7 @@ defmodule StreamMandelbrot do
 
     Pixel.map(cross_product,{h,w}, defining_points)
     |> Orbit.number(imax: max_iter)
-    |> Colour.rgb2(max_iter)
+    |> Colour.rgb3(max_iter)
     |> Nx.devectorize()
     |> Nx.as_type(:u8)
   end
@@ -443,7 +467,7 @@ StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 150})
 |> Kino.Image.new()
 ```
 
-## Zoom in and out
+## ExZoom in and out
 
 In this module, we are able to click on a point of the image and zoom in and dive into the fractal.
 
@@ -464,18 +488,18 @@ We can transform the binary into RGBA and display it into the canvas by building
 > use the `Uint8Array` container and allocate an `Uint8ClampedArray` view. Then use the `ImageData` from the Canvas API and `window.createImageBitmap` to fill in the canvas.
 
 ```elixir
-defmodule Zoom do
+defmodule ExZoom do
   import Nx.Defn
 
-  @h 400 #800
-  @w  500 #1100
+  @h 800
+  @w  1100
   @imax 150
   @rows_per_task 20
 
   # Nx computations ------------------------------------
   defn compute(slice, %{max_iter: max_iter}) do
     Orbit.number(slice, imax: max_iter)
-    |> Colour.rgb2(max_iter)
+    |> Colour.rgb4(max_iter)
     |> Nx.devectorize()
     |> Nx.as_type(:u8)
   end
@@ -484,10 +508,8 @@ defmodule Zoom do
   # <--------------------------------------------------
   
   def consume(binary, %{h: h, w: w, max_iter: max_iter}) do
-    rows_per_task =  @rows_per_task
-    tmp_rem = rem(h, rows_per_task) 
-    rem = if tmp_rem == 0, do: rows_per_task, else: tmp_rem
-    nb_tasks = div(h, rows_per_task)
+    # the height is truncated as you cannot stack tensor of different shapes easily
+    nb_tasks = div(h, @rows_per_task)
     
     opts =  %{max_iter: max_iter}
 
@@ -501,15 +523,12 @@ defmodule Zoom do
 
     
     computations = 
-      for task_id <- 0..nb_tasks do
+      for task_id <- 0..nb_tasks-1 do
         Task.async(fn ->
           # we shift the start index by the number of rows already consummed
-          start_row = task_id * rows_per_task
-          remaining_tasks = 
-            if task_id ==  (nb_tasks), do: min(rem, rows_per_task), else: rows_per_task
-          
+          start_row = task_id * @rows_per_task
           slice = 
-            Nx.slice(t, [start_row, 0], [remaining_tasks, w]) |> Nx.vectorize([:row, :col])
+            Nx.slice(t, [start_row, 0], [@rows_per_task, w]) |> Nx.vectorize([:row, :col])
             
           # apply our Nx pipeline to the slice
           Nx.Defn.jit_apply(fn t ->
@@ -520,15 +539,18 @@ defmodule Zoom do
           )
           end)
       end
-      
-    Task.await_many(computations, :infinity)
-    # re-order as per the task_id we retunrned
-    |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
-    |> Enum.map(&(elem(&1, 1)))
-    |> Nx.stack()
-    |> Nx.devectorize()
-    # send to the browser as binary
-    |> Nx.to_binary()
+    
+    binary = 
+      Task.await_many(computations, :infinity)
+      # re-order as per the task_id we retunrned
+      |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
+      |> Enum.map(&(elem(&1, 1)))
+      |> Nx.stack()
+      |> Nx.devectorize()
+      # send to the browser as binary
+      |> Nx.to_binary()
+    # the browser needs to know the nb of rows as it may be truncated
+    {nb_tasks * @rows_per_task, binary}
   end
 
 
@@ -558,8 +580,8 @@ defmodule Zoom do
   @impl true
   def handle_event("clicked", {:binary,_, buffer}, %{assigns: assigns} = ctx) do
     %{h: h, w: w, max_iter: max_iter} = assigns
-    binary = consume(buffer, %{h: h, w: w, max_iter: max_iter})
-    broadcast_event(ctx,"new", {:binary, %{}, binary})
+    {nb_rows, binary} = consume(buffer, %{h: h, w: w, max_iter: max_iter})
+    broadcast_event(ctx,"new", {:binary, %{nb_rows: nb_rows}, binary})
     {:noreply, ctx}
   end
 
@@ -607,27 +629,21 @@ defmodule Zoom do
       }
     
       // received from server -----------------------------------
-      ctx.handleEvent("new", ([_, binary]) => {
+      ctx.handleEvent("new", ([{nb_rows}, binary]) => {
+        //const len = binary.byteLength; 
         console.log("new")
-        const rgbArray = new Uint8Array(binary);
-        const imageDataArray = new Uint8ClampedArray(
-          canvasWidth * canvasHeight * 4
-        ); // RGBA
-        
-        // Fill the Uint8ClampedArray with RGB data, add alpha channel
-        for (let i = 0, j = 0; i < rgbArray.length; i += 3, j += 4) {
-          imageDataArray[j] = rgbArray[i];     // R
-          imageDataArray[j + 1] = rgbArray[i + 1]; // G
-          imageDataArray[j + 2] = rgbArray[i + 2]; // B
-          imageDataArray[j + 3] = 255;         // Alpha (fully opaque)
-        }
-
-        // Create ImageData object
-        const imageData = new ImageData(imageDataArray, canvasWidth, canvasHeight);
-      
-        // Render the image onto the canvas
-        createImageBitmap(imageData).then(bitmap => canvasCtx.drawImage(bitmap, 0, 0))
-          
+        const imageData = new ImageData(
+          new Uint8ClampedArray(binary), 
+          canvasWidth, 
+          nb_rows
+        );
+    
+    
+        // we send RGBA, 4 bytes so we can immediately render 
+        // to canvas with "createImageBitmap"
+        createImageBitmap(imageData).then(bitmap => 
+          canvasCtx.drawImage(bitmap, 0, 0)
+        );
       });
 
       // push from browser -------------------------------------
@@ -644,10 +660,7 @@ defmodule Zoom do
         ctx.pushEvent("clicked", [{}, buffer])
       });
 
-      
-
-
-      // compute all cartesians coordinntes in the current canvas
+      // compute all cartesians coordinates in the current canvas
       function getPoints(bounds) {
         const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
         const floatArray = new Float32Array(buffer);
@@ -679,16 +692,18 @@ You can `CTRL+CLICK` to zoom into the point of your choice. The zoom factor is 1
 You can dezoom with `CTRL+SHIFT+CLICK`.
 
 ```elixir
-Zoom.start()
+ExZoom.start()
 ```
 
-## Speed up with Zig embedded code
+## Zoom in with Zig
 
-If we still need or want extra speed, we can also embed `Zig` code in `Elixir` within a Livebook.
+We can provide extra speed by using `Zig` code in `Elixir` within a Livebook.
+
+The Livebook orchestrates between the client Javascript and the Zig snippet.
 
 `Zigler` offers a [remarkable documentation](https://hexdocs.pm/zigler/readme.html#installation-elixir).
 
-:exclamation: You may to have `Zig` installed on your machine.
+!! You may to have `Zig` installed on your machine.
 
 In the `Livebook`, we add the dependencies (in the first cell):
 
@@ -698,18 +713,286 @@ In the `Livebook`, we add the dependencies (in the first cell):
 Mix.install([{:zigler, "~> 0.13.3"},{:zig_get, "~> 0.13.1"},])
 ```
 
-With the `Zigler`, we can even inline Zig code.
+With the `Zigler`, you can inline Zig code as below.
 
 The code below runs the same algorithm and runs __OS threads__ (bands of rows) for concurrency.
 
 > we use the `beam` memory allocator from the library.
 
-> the slice is returned as a binary - typed as `beam.term` - to be easily consumed by `Nx` and then `Kino`.
+We return the data from `Zig` as a _binary_ .
+
+It can easliy be consumed by `Nx` and then `Kino` (see further below).
+
+However, in the first snippet below, we went to extra speed and less bandwidth consumption. The Livebook will pass it to the browser into an `ImageData` container and render to the canvas via `window.createImageBitmap`.
+
+You can `CLICK` into the image and explore with the power of Zig (`SHIFT+CLICK` do "de-zoom"). We use a factor 5.
+
+We pass the boundary of the canvas (in the 2D-plan coordiantes) to Zig.
+
+The Zig NIF will compute by spawning OS threads (as much as the numbers of CPU cores).
+
+It will return the RGBA values for each point of the canvas as a binary.
+
+```elixir
+defmodule Zoom do
+  use Zig, otp_app: :zigler,
+   # nifs: [..., generate: [:threaded]]
+    release_mode: :fast
+
+
+  ~Z"""
+  const beam = @import("beam");
+  const std = @import("std");
+  
+  const Point = struct { x: f32, y: f32 };
+  const point_size = @sizeOf(Point);
+  const Bounds = struct { topLeft: Point, bottomRight: Point, cols: usize, rows: usize };
+
+
+  /// nif: generate/5 Threaded
+  pub fn generate(
+      rows: usize, 
+      cols: usize, 
+      imax: usize, 
+      topLeft: [2]f32, 
+      bottomRight: [2]f32
+  ) !beam.term {
+    const colours = try beam.allocator.alloc(u8, rows * cols * 4);
+    defer beam.allocator.free(colours);
+
+    const cpus = try std.Thread.getCpuCount();
+    var threads = try beam.allocator.alloc(std.Thread, cpus);
+    defer beam.allocator.free(threads);
+
+    const base_rows_per_thread = rows / cpus;
+    const remainder_rows = rows % cpus;
+
+    const bounds = Bounds{
+        .topLeft = Point{ .x = topLeft[0], .y = topLeft[1] },
+        .bottomRight = Point{ .x = bottomRight[0], .y = bottomRight[1] },
+        .cols = cols,
+        .rows = rows,
+    };
+
+    for (0..cpus) |thread_id| {
+      const start_row = thread_id * base_rows_per_thread;
+      const extra_rows = if (thread_id == cpus - 1) remainder_rows else 0;
+      const rows_per_thread = base_rows_per_thread + extra_rows;
+
+      const args = .{colours, start_row, rows_per_thread, imax, bounds};
+      threads[thread_id] = try std.Thread.spawn(.{}, processThread, args);
+    }
+
+    for (threads[0..cpus]) |thread| {
+      thread.join();
+    }
+
+    return beam.make(colours, .{ .as = .binary });
+  }
+
+  // mutate the "colours" slice
+  fn processThread(
+      colours: []u8, 
+      start_row: usize, 
+      rows_per_thread: usize,
+      imax: usize, 
+      bounds: Bounds
+  ) void {
+    var idx: usize = start_row;
+    const end = start_row + rows_per_thread;
+
+    while (idx < end) : (idx += 1) {
+      for (0..bounds.cols) |j| {
+        const point = mapPixel(.{ idx, j }, bounds);
+        const iterNumber = iterationNumber(point, imax);
+        const colour = createRgba(iterNumber, imax);
+        const colour_idx = (idx * bounds.cols + j) * 4;
+        @memcpy(colours[colour_idx..colour_idx + 4], &colour);
+      }
+    }
+  }
+
+  fn iterationNumber(p: Point, imax: usize) ?usize {
+    if (p.x > 0.6 or p.x < -2.1) return null;
+    if (p.y > 1.2 or p.y < -1.2) return null;
+    // first cardiod
+    if ((p.x + 1) * (p.x + 1) + p.y * p.y < 0.0625) return null;
+
+    var x2: f64 = 0;
+    var y2: f64 = 0;
+    var w: f64 = 0;
+
+    for (0..imax) |j| {
+      if (x2 + y2 > 4) return j;
+      const x: f64 = x2 - y2 + p.x;
+      const y: f64 = w - x2 - y2 + p.y;
+      x2 = x * x;
+      y2 = y * y;
+      w = (x + y) * (x + y);
+    }
+    return null;
+}
+
+  fn createRgba(iter: ?usize, imax: usize) [4]u8 {
+    // If it didn't escape, return black
+    if (iter == null) return [_]u8{ 0, 0, 0, 255 };
+
+    if (iter.? < imax and iter.? > 0) {
+      const i = iter.? % 16;
+      return switch (i) {
+        0 => [_]u8{ 66, 30, 15, 255 },
+        1 => [_]u8{ 25, 7, 26, 255 },
+        2 => [_]u8{ 9, 1, 47, 255 },
+        3 => [_]u8{ 4, 4, 73, 255 },
+        4 => [_]u8{ 0, 7, 100, 255 },
+        5 => [_]u8{ 12, 44, 138, 255 },
+        6 => [_]u8{ 24, 82, 177, 255 },
+        7 => [_]u8{ 57, 125, 209, 255 },
+        8 => [_]u8{ 134, 181, 229, 255 },
+        9 => [_]u8{ 211, 236, 248, 255 },
+        10 => [_]u8{ 241, 233, 191, 255 },
+        11 => [_]u8{ 248, 201, 95, 255 },
+        12 => [_]u8{ 255, 170, 0, 255 },
+        13 => [_]u8{ 204, 128, 0, 255 },
+        14 => [_]u8{ 153, 87, 0, 255 },
+        15 => [_]u8{ 106, 52, 3, 255 },
+        else => [_]u8{ 0, 0, 0, 255 },
+      };
+    }
+    return [_]u8{ 0, 0, 0, 255 };
+  }
+
+  // canvas-(i,j) are rows,cols and become (x,y) 2D-coordinates within the bounds
+  fn mapPixel(pixel: [2]usize, ctx: Bounds) Point {
+    const x: f32 = ctx.topLeft.x + @as(f32, @floatFromInt(pixel[1])) / @as(f32,  @floatFromInt(ctx.cols)) * (ctx.bottomRight.x - ctx.topLeft.x);
+    const y: f32 = ctx.topLeft.y - @as(f32, @floatFromInt(pixel[0])) / @as(f32,  @floatFromInt(ctx.rows)) * (ctx.topLeft.y - ctx.bottomRight.y);
+    return Point{ .x = x, .y = y };
+  }
+  """
+end
+
+defmodule KinoZig do
+  use Kino.JS
+  use Kino.JS.Live
+
+  @h 1000
+  @w 1200
+  @imax 450
+  @factor 5
+
+  def canvas(h, w, factor) do
+    """
+    <canvas id="myCanvas" width=#{w} height=#{h} data-zoom=#{factor}></canvas>
+    """
+  end
+
+  def start(), do: Kino.JS.Live.new(__MODULE__, canvas(@h, @w, @factor))
+
+  @impl true
+  def init(html, ctx) do
+    ctx = assign(ctx, %{max_iter: @imax, h: @h, w: @w})
+    {:ok, assign(ctx, html: html)}
+  end
+
+  @impl true
+  def handle_connect(ctx) do
+    {:ok, ctx.assigns.html, ctx}
+  end
+
+  @impl true
+  def handle_event("clicked", %{"boundary" => %{"tl" => tl, "br"=> br}}, ctx) do
+    %{assigns: %{h: h, w: w, max_iter: max_iter}} = ctx
+    colours = Zoom.generate(h, w, max_iter, tl, br)
+    broadcast_event(ctx,"new", {:binary, %{}, colours})
+    {:noreply, ctx}
+  end
+
+  
+  asset "main.js" do
+    """
+    export function init(ctx, html) {
+      ctx.root.innerHTML = html;
+
+      const canvas = document.getElementById("myCanvas");
+      const canvasCtx = canvas.getContext("2d");
+      const canvasWidth = canvas.width, canvasHeight = canvas.height;
+      const factor = canvas.dataset.zoom;
+    
+      // initial bounds
+      let boundary = {tl: [-2.01, 1.01], br: [1.01,-1.01]}
+
+      // Calcuate new bounds from clicked points with zoom factor
+      function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
+        const {tl, br} = bounds;
+        const { zoomRatio = factor, zoomIn = true} = options;
+        const oldWidth = br[0] - tl[0];
+        const oldHeight = tl[1] - br[1];
+        const new_center_x = tl[0] + (canvasX / (canvasWidth-1)) * (oldWidth);
+        const new_center_y = tl[1] - (canvasY / (canvasHeight-1)) * (oldHeight);
+        console.log(new_center_x, new_center_y);
+
+        const factor = zoomIn ? 1/zoomRatio : zoomRatio;
+        const newWidth = oldWidth * factor;
+        const newHeight = oldHeight * factor;
+
+        const new_boundary = {
+          tl: [new_center_x - newWidth/2, new_center_y + newHeight/2],
+          br: [new_center_x + newWidth/2, new_center_y - newHeight/2]
+        }
+
+        Object.assign(boundary, new_boundary);
+        return new_boundary;
+      }
+    
+      // received from server -----------------------------------
+      ctx.handleEvent("new", ([_, binary]) => {
+        const imageData = new ImageData(
+          new Uint8ClampedArray(binary), 
+          canvasWidth, 
+          canvasHeight
+        );
+  
+        // Render to canvas
+        createImageBitmap(imageData).then(bitmap => 
+          canvasCtx.drawImage(bitmap, 0, 0)
+        );
+      });
+          
+
+      // push from browser -------------------------------------
+      canvas.addEventListener("click", (e) => {
+        //if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
+        const rect = canvas.getBoundingClientRect();
+        console.log(rect)
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        console.log(e.clientX, e.clientY, rect.left, rect.top, canvasX, canvasY)
+        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomRatio: factor, zoomIn: !e.shiftKey});
+    
+        //-- send data to the server -->
+        ctx.pushEvent("clicked", {boundary: newBounds})
+      });
+
+      // first render---------------
+      ctx.pushEvent("clicked", {boundary})
+    }
+    """
+  end
+end
+```
+
+```elixir
+KinoZig.start()
+```
+
+## Static image with Zig and Nx and Kino
+
+The image is still calculated by Zig but we use `Nx` to consume the binary data and `Kino` to render it (as a B64 string, less performant).
 
 ```elixir
 defmodule Zigit do
   use Zig, otp_app: :zigler,
-    nifs: [..., generate_mandelbrot: [:threaded]],
+    #nifs: [..., generate_mandelbrot: [:threaded]],
     release_mode: :fast
 
   ~Z"""
@@ -850,11 +1133,11 @@ end
 
 We run the Zig code. It returns a binary that we are able to consume with `Nx` and display the image.
 
-To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic.
+To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic!
 
 ```elixir
-h = 1000; w = 1200
-max_iter = 200;
+h = 1200; w = 1500
+max_iter = 300;
 
 Zigit.generate_mandelbrot(w, h, max_iter)
 |> Nx.from_binary(:u8)
@@ -862,490 +1145,4 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-## Misiurewicz point
-
-```elixir
-defmodule Mand do
-  use Zig, otp_app: :zigler,
-    nifs: [..., generate_misiurewicz: [:threaded]],
-    release_mode: :fast
-
-
-  ~Z"""
-    const beam = @import("beam");
-    const std = @import("std");
-    const Cx = std.math.Complex(f64);
-
-    const print = std.debug.print;
-
-    const Context = struct { res_x: usize, res_y: usize, imax: usize, w: f64, h: f64, topLeft: Cx, bottomRight: Cx };
-
-    /// nif: generate_misiurewicz/7 Threaded
-    pub fn generate_misiurewicz(res_x: usize, res_y: usize, imax: usize, topLeft_x: f64, topLeft_y: f64, bottomRight_x: f64, bottomRight_y: f64) !beam.term {
-        const pixels = try beam.allocator.alloc(u8, res_x * res_y * 3);
-        defer beam.allocator.free(pixels);
-
-        const tl = Cx{ .re = topLeft_x, .im = topLeft_y };
-        const br = Cx{ .re = bottomRight_x, .im = bottomRight_y };
-        const w = br.re - tl.re;
-        const h = br.im - tl.im;
-        // threaded version
-        const ctx = Context{ .res_x = res_x, .res_y = res_y, .imax = imax, .topLeft = tl, .bottomRight = br, .w = w, .h = h };
-        const res = try createBands(pixels, ctx);
-        return beam.make(res, .{ .as = .binary });
-    }
-
-    // <--- threaded version
-    fn createBands(pixels: []u8, ctx: Context) ![]u8 {
-        const cpus = try std.Thread.getCpuCount();
-        var threads = try beam.allocator.alloc(std.Thread, cpus);
-        defer beam.allocator.free(threads);
-
-        const rows_to_process = ctx.res_y;
-        // one band is one count of cpus
-        const rows_per_band = (rows_to_process + cpus - 1) / cpus;
-
-        for (0..cpus) |cpu_count| {
-            const start_row = cpu_count * rows_per_band;
-
-            // Stop if there are no rows to process
-            if (start_row >= rows_to_process) break;
-
-            const end_row = @min(start_row + rows_per_band, rows_to_process);
-            const args = .{ ctx, pixels, start_row, end_row };
-            threads[cpu_count] = try std.Thread.spawn(.{}, processRows, args);
-        }
-        for (threads[0..cpus]) |thread| {
-            thread.join();
-        }
-
-        return pixels;
-    }
-
-    fn processRows(ctx: Context, pixels: []u8, start_row: usize, end_row: usize) void {
-        for (start_row..end_row) |current_row| {
-            processRow(ctx, pixels, current_row);
-        }
-    }
-
-    fn processRow(ctx: Context, pixels: []u8, row_id: usize) void {
-        // loop over columns
-        for (0..ctx.res_x) |col_id| {
-            const c = mapPixel(.{ @as(usize, @intCast(row_id)), @as(usize, @intCast(col_id)) }, ctx);
-            const iter = iterationNumber(c, ctx.imax);
-            const colour = createRgb2(iter, ctx.imax);
-
-            const p_idx = (row_id * ctx.res_x + col_id) * 3;
-            pixels[p_idx + 0] = colour[0];
-            pixels[p_idx + 1] = colour[1];
-            pixels[p_idx + 2] = colour[2];
-        }
-    }
-
-    fn mapPixel(pixel: [2]usize, ctx: Context) Cx {
-        const px_width = ctx.res_x - 1;
-        const px_height = ctx.res_y - 1;
-        const scale_x = ctx.w / @as(f64, @floatFromInt(px_width));
-        const scale_y = ctx.h / @as(f64, @floatFromInt(px_height));
-
-        const re = ctx.topLeft.re + scale_x * @as(f64, @floatFromInt(pixel[1]));
-        const im = ctx.topLeft.im + scale_y * @as(f64, @floatFromInt(pixel[0]));
-        return Cx{ .re = re, .im = im };
-    }
-
-    fn iterationNumber(c: Cx, imax: usize) ?usize {
-        if (c.re > 0.6 or c.re < -2.1) return null;
-        if (c.im > 1.2 or c.im < -1.2) return null;
-        // first cardiod
-        if ((c.re + 1) * (c.re + 1) + c.im * c.im < 0.0625) return null;
-
-        var x2: f64 = 0;
-        var y2: f64 = 0;
-        var w: f64 = 0;
-
-        for (0..imax) |j| {
-            if (x2 + y2 > 4) return j;
-            const x: f64 = x2 - y2 + c.re;
-            const y: f64 = w - x2 - y2 + c.im;
-            x2 = x * x;
-            y2 = y * y;
-            w = (x + y) * (x + y);
-        }
-
-        // var z = Cx{ .re = 0.0, .im = 0.0 };
-        // for (0..imax) |j| {
-        //     if (sqnorm(z) > 4) return j;
-        //     z = Cx.mul(z, z).add(c);
-        // }
-        return null;
-    }
-
-    fn sqnorm(z: Cx) f64 {
-        return z.re * z.re + z.im * z.im;
-    }
-
-
-    fn createRgb2(iter: ?usize, imax: usize) [3]u8 {
-        // If it didn't escape, return black
-        if (iter == null) return [_]u8{ 0, 0, 0 };
-
-        if (iter.? < imax and iter.? > 0) {
-            const i = iter.? % 16;
-            return switch (i) {
-                0 => [_]u8{ 66, 30, 15 },
-                1 => [_]u8{ 25, 7, 26 },
-                2 => [_]u8{ 9, 1, 47 },
-                3 => [_]u8{ 4, 4, 73 },
-                4 => [_]u8{ 0, 7, 100 },
-                5 => [_]u8{ 12, 44, 138 },
-                6 => [_]u8{ 24, 82, 177 },
-                7 => [_]u8{ 57, 125, 209 },
-                8 => [_]u8{ 134, 181, 229 },
-                9 => [_]u8{ 211, 236, 248 },
-                10 => [_]u8{ 241, 233, 191 },
-                11 => [_]u8{ 248, 201, 95 },
-                12 => [_]u8{ 255, 170, 0 },
-                13 => [_]u8{ 204, 128, 0 },
-                14 => [_]u8{ 153, 87, 0 },
-                15 => [_]u8{ 106, 52, 3 },
-                else => [_]u8{ 0, 0, 0 },
-            };
-        }
-        return [_]u8{ 0, 0, 0 };
-      }
-  """
-end
-```
-
-```elixir
-x0 = -0.1011
-y0 = 0.9563
-tl_x = x0 - 0.0001
-tl_y = y0 + 0.0001
-br_x = x0 + 0.0001
-br_y = y0 - 0.0001
-h = 4_000
-w = 5_000
-max_iter = 400
-
-Mand.generate_misiurewicz(w, h, max_iter, tl_x, tl_y, br_x, br_y)
-|> Nx.from_binary(:u8)
-|> Nx.reshape({h, w, 3})
-|> Kino.Image.new()
-```
-
-## Zoom in with Zig
-
-You can `CLICK` into the image and explore with the power of Zig.
-
-```elixir
-defmodule ZigSpeed do
-  use Zig, otp_app: :zigler,
-    #nifs: [..., generate_view],
-    release_mode: :fast
-
-
-  ~Z"""
-  const beam = @import("beam");
-  const std = @import("std");
-    
-  const print = std.debug.print;
-    
-  const Point = struct { x: f32, y: f32 };
-  const point_size: usize = @sizeOf(Point);
-
-  const Progress = struct {
-    points_processed: usize,
-    total_points: usize,
-    elapsed_ms: u64,
-  };
-  
-    
-  // / nif: generate_view
-  pub fn generate_view(data: [*]const u8, len: u32, imax: usize) !beam.term {
-    if (len < @sizeOf(Point)) {
-      return error.BufferTooSmall;
-    }
-
-    // Ensure the length is a multiple of point size
-    if (len % @sizeOf(Point) != 0) {
-        return error.InvalidBufferLength;
-    }
-    const start_time = std.time.milliTimestamp();
-  
-    // pointer the BEAM memory
-    const raw_buffer = data[0..len];
-
-    // Calculate how many points we expect
-    const nb_points: usize = len / (@sizeOf(f32) * 2);
-
-    // Create a slice of f32 values (two per point)
-    const float_slice = std.mem.bytesAsSlice(f32, raw_buffer);
-
-    const colours = try beam.allocator.alloc(u8, nb_points * 4);
-    defer beam.allocator.free(colours);
-
-    var i: usize = 0;
-    var color_idx: usize = 0;
-    while (i < float_slice.len) : (i += 2) {
-      if (i + 1 >= float_slice.len) break;
-      
-      const point = Point{
-          .x = float_slice[i],
-          .y = float_slice[i + 1],
-      };
-  
-      if (i % (float_slice.len / 10) == 0) {
-        const progress = Progress{
-            .points_processed = i / 2,
-            .total_points = nb_points,
-            .elapsed_ms = @intCast(std.time.milliTimestamp() - start_time),
-        };
-        printProgress(progress);
-      }
-
-      const iterNumber = iterationNumber(point, imax);
-      const rgba = createRgba(iterNumber, imax);
-
-      // Store colors
-      @memcpy(colours[color_idx..color_idx + 4], &rgba);
-      color_idx += 4;
-  
-      // Note: the @memcpy is equivalent to this....
-      //colours[color_idx] = rgba[0];
-      //colours[color_idx + 1] = rgba[1];
-      //colours[color_idx + 2] = rgba[2];
-      //colours[color_idx + 3] = rgba[3];
-      //color_idx += 4;
-    }
-
-    // For debugging
-    if (nb_points > 0) {
-      const first_point = Point{
-          .x = float_slice[0],
-          .y = float_slice[1],
-      };
-      std.debug.print("First point: x={d}, y={d}\n", .{
-          first_point.x,
-          first_point.y,
-      });
-    }
-  
-    return beam.make(colours, .{ .as = .binary });
-  }
-
-  fn iterationNumber(p: Point, imax: usize) ?usize {
-      if (p.x > 0.6 or p.x < -2.1) return null;
-      if (p.y > 1.2 or p.y < -1.2) return null;
-      // first cardiod
-      if ((p.x + 1) * (p.x + 1) + p.y * p.y < 0.0625) return null;
-  
-      var x2: f64 = 0;
-      var y2: f64 = 0;
-      var w: f64 = 0;
-  
-      for (0..imax) |j| {
-          if (x2 + y2 > 4) return j;
-          const x: f64 = x2 - y2 + p.x;
-          const y: f64 = w - x2 - y2 + p.y;
-          x2 = x * x;
-          y2 = y * y;
-          w = (x + y) * (x + y);
-      }
-      return null;
-  }
-
-  fn createRgba(iter: ?usize, imax: usize) [4]u8 {
-      // If it didn't escape, return black
-      if (iter == null) return [_]u8{ 0, 0, 0, 255 };
-  
-      if (iter.? < imax and iter.? > 0) {
-          const i = iter.? % 16;
-          return switch (i) {
-            0 => [_]u8{ 66, 30, 15, 255 },
-            1 => [_]u8{ 25, 7, 26, 255 },
-            2 => [_]u8{ 9, 1, 47, 255 },
-            3 => [_]u8{ 4, 4, 73, 255 },
-            4 => [_]u8{ 0, 7, 100, 255 },
-            5 => [_]u8{ 12, 44, 138, 255 },
-            6 => [_]u8{ 24, 82, 177, 255 },
-            7 => [_]u8{ 57, 125, 209, 255 },
-            8 => [_]u8{ 134, 181, 229, 255 },
-            9 => [_]u8{ 211, 236, 248, 255 },
-            10 => [_]u8{ 241, 233, 191, 255 },
-            11 => [_]u8{ 248, 201, 95, 255 },
-            12 => [_]u8{ 255, 170, 0, 255 },
-            13 => [_]u8{ 204, 128, 0, 255 },
-            14 => [_]u8{ 153, 87, 0, 255 },
-            15 => [_]u8{ 106, 52, 3, 255 },
-            else => [_]u8{ 0, 0, 0, 255 },
-          };
-      }
-      return [_]u8{ 0, 0, 0, 255 };
-  }
-
-  fn printProgress(progress: Progress) void {
-    const percentage = 
-      @as(f32, @floatFromInt(progress.points_processed)) / 
-                      @as(f32, @floatFromInt(progress.total_points)) * 100.0;
-    
-    const points_per_sec = 
-      if (progress.elapsed_ms > 0)
-        @as(f32, @floatFromInt(progress.points_processed)) / 
-          (@as(f32, @floatFromInt(progress.elapsed_ms)) / 1000.0)
-    else
-        0.0;
-    
-    std.debug.print("\rProgress: {d:.1}% ({d} pts/sec)", .{
-        percentage,
-        @as(u32, @intFromFloat(points_per_sec)),
-    });
-  }
-  """
-end
-
-defmodule KinoZig do
-  use Kino.JS
-  use Kino.JS.Live
-
-  @h 1500
-  @w 2000
-  @imax 250
-  #@rows_per_task 20
-
-  def canvas(h, w) do
-    """
-    <canvas id="myCanvas" width=#{w} height=#{h}></canvas>
-    """
-  end
-
-  def start(), do: Kino.JS.Live.new(__MODULE__, canvas(@h, @w))
-
-  @impl true
-  def init(html, ctx) do
-    ctx = assign(ctx, %{max_iter: @imax, h: @h, w: @w})
-    {:ok, assign(ctx, html: html)}
-  end
-
-  @impl true
-  def handle_connect(ctx) do
-    {:ok, ctx.assigns.html, ctx}
-  end
-
-  @impl true
-  def handle_event("clicked", {:binary,%{"length" => length}, buffer}, %{assigns: assigns} = ctx) do
-    %{h: _h, w: _w, max_iter: max_iter} = assigns
-    IO.inspect({length, length == byte_size(buffer)}, label:  "length: ")
-    colours = ZigSpeed.generate_view(buffer, length, max_iter)
-      
-    broadcast_event(ctx,"new", {:binary, %{}, colours})
-    {:noreply, ctx}
-  end
-
-  
-  asset "main.js" do
-    """
-    export function init(ctx, html) {
-      ctx.root.innerHTML = html;
-
-      const canvas = document.getElementById("myCanvas");
-      const canvasCtx = canvas.getContext("2d");
-      const canvasWidth = canvas.width, canvasHeight = canvas.height;
-    
-      // initial bounds
-      let boundary = {min_x: -2, max_y: 1, max_x: 1, min_y: -1};
-
-      // Function to convert canvas coordinate to complex coordinate
-      function toCartesian(canvasX, canvasY, bounds) {
-        const {min_x, max_x, min_y, max_y} = bounds;
-        const x = min_x + (canvasX / (canvasWidth-1)) * (max_x - min_x);
-        const y = max_y - (canvasY / (canvasHeight-1)) * (max_y - min_y);
-        return { x, y };
-      }
-
-      function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
-        // Get the clicked point's corresponding 2D plane coordinates
-        const { x: newCenterX, y: newCenterY } = toCartesian(canvasX, canvasY, bounds)
-        const { zoomRatio = 5, zoomIn = true} = options;
-
-        const {min_x, max_x, min_y, max_y} = bounds;
-        // Compute the width and height of the new zoomed rectangle
-        const oldWidth = max_x - min_x;
-        const oldHeight = max_y - min_y;
-
-        const factor = zoomIn ? 1/zoomRatio : zoomRatio;
-        const newWidth = oldWidth * factor;
-        const newHeight = oldHeight * factor;
-      
-        return { 
-          min_x: newCenterX - newWidth / 2,
-          max_x: newCenterX + newWidth / 2, 
-          min_y: newCenterY - newHeight / 2, 
-          max_y: newCenterY + newHeight / 2
-        };
-      }
-    
-      // received from server -----------------------------------
-      ctx.handleEvent("new", ([_, binary]) => {
-        console.log("new")
-        const imageData = new ImageData(
-          new Uint8ClampedArray(binary), 
-          canvasWidth, 
-          canvasHeight
-        );
-  
-        // Render to canvas
-        createImageBitmap(imageData).then(bitmap => canvasCtx.drawImage(bitmap, 0, 0));
-      });
-          
-
-      // push from browser -------------------------------------
-      canvas.addEventListener("click", (e) => {
-        //if (!e.ctrlKey) return; // <-- click + ctrl pressed to zoom it
-        const rect = canvas.getBoundingClientRect();
-        const canvasX = e.clientX - rect.left;
-        const canvasY = e.clientY - rect.top;
-        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
-    
-        //-- send data to the server -->
-        Object.assign(boundary, newBounds);
-        const buffer = getPoints(boundary)
-        console.log(buffer.byteLength)
-        ctx.pushEvent("clicked", [{length: buffer.byteLength}, buffer])
-      });
-
-      
-
-
-      // compute all cartesians coordinntes in the current canvas
-      function getPoints(bounds) {
-        const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
-        const floatArray = new Float32Array(buffer);
-
-        let index = 0;
-        for (let n = 0; n < canvasWidth * canvasHeight; n++) {
-          const { x, y } = toCartesian(
-              n % canvasWidth,              // i
-              Math.floor(n / canvasWidth),  // j
-              bounds
-          );
-          floatArray[n * 2] = x;
-          floatArray[n * 2 + 1] = y;
-        }
-        return buffer;
-      }
-
-      // first render---------------
-      const buffer = getPoints(boundary)
-      ctx.pushEvent("clicked", [{length: buffer.byteLength}, buffer])
-    }
-    """
-  end
-end
-```
-
-```elixir
-KinoZig.start()
-```
-
-<!-- livebook:{"offset":44300,"stamp":{"token":"XCP.abDJvGeTy0Spc72a9UjQnfAXg9-X-cJM20fYiamFy8FTNEjpWYobxIe3lw-X7Jz4YUoFTa667A4o6wDtrC4a5RoLXKayisyNBkU6K90NOUIxcJFz_r8uy34GJc9xxH0npHVaHktj4YAAWC6XXdOxFMPGgfxSPPC2_Dkc","version":2}} -->
+<!-- livebook:{"offset":38414,"stamp":{"token":"XCP.JhAnZXG_6-DVtSW0sxAVBDQDkC7XYKpl-E-FowPXbMPr79NVmfvemIWoCaKQUJQajhKe2_VNxg4wNvZ_w1t7n0x7uUKZFZD_u3_4pQKZOIXXSC5CcX0XzixrBP__hy-gi5SfobB0ZfEjyKh3ON6_KFM9kVEMFYdTF16R","version":2}} -->
