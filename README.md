@@ -8,7 +8,7 @@ Source:
 - [Plotting algorithm](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set)
 
 
-This repo is about visualising the orbits of points in the 2D-plane under a given map known the Julia or MAndelbrot sets.
+This repo is about visualising the orbits of points in the 2D-plane under the map `z -> z*z + c` known as Julia or Mandelbrot sets.
 
 We are looking whether the iterates stay bounded are not. When we associate a colour that reflects this stability, this gives rise to Mandelbrot images.
 
