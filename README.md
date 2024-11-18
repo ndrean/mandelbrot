@@ -67,11 +67,11 @@ Given an image of size W x H in pixels,
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
 
 
-THere is a module where you can explore the fractal by clicking into the 2D-plane. 
+You can explore the fractal by clicking into the 2D-plane. 
 
-This happens thanks to `KinoJS.Live` as we pass binary between the browser and the Livebook used as a server.
+This happens thanks to `KinoJS.Live`.
 
-Furthermore, we have another version with  `Zig` embedded code. It is 2 magnitude faster.
+We have a pur `Elixir` version that uses `Nx` with the `EXLA` backend, and another one that uses embedded `Zig` code for the heavy computations. The later is 3-4 magnitude faster.
 
 
 ![image](https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a)
