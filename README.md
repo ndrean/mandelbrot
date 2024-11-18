@@ -7,21 +7,24 @@ Source:
 - [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set)
 - [Plotting algorithm](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set)
 
-<img with="600" alt="zoom detail" src="https://github.com/user-attachments/assets/f0e9dcaa-34b2-4789-97fd-895355a6a7a9">
 
+This repo is about visualising the orbits of points in the 2D-plane under a given map known the Julia or MAndelbrot sets.
 
-
-IT is about studying the orbits of points in the 2D-plane under a given map. We are looking whether the iterates stay bounded are not. When we associate a colour that reflects this stability, this gives rise to Mandelbrot images: we associate a colour to each point.
+We are looking whether the iterates stay bounded are not. When we associate a colour that reflects this stability, this gives rise to Mandelbrot images.
 
 These images are therefor a colourful representation of where the sequence is stable and how fast does these sequences diverge.
+
+<img with="600" alt="zoom detail" src="https://github.com/user-attachments/assets/f0e9dcaa-34b2-4789-97fd-895355a6a7a9">
+
 
 This repo contains:
 - a pur `Zig` computation
 - two `Livebook` to explore the orbits of points and to zoom into the Mandelbrot set.
 
 The Livebook proposes:
-- a pur `Elixir` one using Numerical Elixir with `EXLA` backend.
-- an enhanced version where te computations are made with embedding  `Zig` code thanks to the library `Zigler`.
+- a pur `Elixir` orbit explorer,
+- a pur `Elixir` implementation  using Numerical Elixir with `EXLA` backend of the Mandelbrot set,
+- an enhanced version where the heavy computations are made with embedding  `Zig` code thanks to the library `Zigler`.
 
 
 
@@ -64,15 +67,13 @@ The code below computes "orbits". You select a point and a little animation disp
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
 
-We can draw these kind of images. 
 
 THere is a module where you can explore the fractal by clicking into the 2D-plane. 
 
 This happens thanks to `KinoJS.Live` as we pass binary between the browser and the Livebook used as a server.
 
-Furthermore, we use Zig embedded code and implemented at the end of the Livebook. It is 2 magnitude faster.
+Furthermore, we have another version with  `Zig` embedded code. It is 2 magnitude faster.
 
-<https://github.com/ndrean/mandelbrot/blob/main/livebook/mandelbrot.livemd>
 
 ![image](https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a)
 
