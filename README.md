@@ -21,10 +21,11 @@ This repo contains:
 - a pur `Zig` computation
 - two `Livebook` to explore the orbits of points and to zoom into the Mandelbrot set.
 
-The Livebook proposes:
-- a pur `Elixir` orbit explorer,
-- a pur `Elixir` implementation  using Numerical Elixir with `EXLA` backend of the Mandelbrot set,
-- an enhanced version where the heavy computations are made with embedding  `Zig` code thanks to the library `Zigler`.
+The two Livebooks are:
+- one proposing a pur `Elixir` orbit explorer. You click and it displays the orbit of any point.
+- the other proposing a Mandelbrot set explorer with a clickable image to zoom in (and out):
+  - we have a pur `Elixir` implementation  using Numerical Elixir with `EXLA` backend of the Mandelbrot set.
+  - we have an enhanced version where the heavy computations are made with running embedded  `Zig` code thanks to the library `Zigler`.
 
 
 
