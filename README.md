@@ -51,17 +51,16 @@ The code below computes "orbits". You select a point and a little animation disp
 <img width="639" alt="Screenshot 2024-11-14 at 19 22 38" src="https://github.com/user-attachments/assets/abe4a943-ac31-44db-85c4-906f14f958bd">
 
 
-## Mandlebrot set explorer
+## Mandelbrot set explorer
 
 ### The algorithm
 
-- instantiate a slice pixels of length say W x H x 3
-- loop over 1..H rows, `i`
-  - loop over 1..W columns, `j`
-  - compute the coordinate c in the complex plan corresponding to the pixel `(i,j)`
+Given an image of size W x H in pixels,
+- loop over 1..H rows,  `i`, and over 1..W columns, `j`
+  - compute the coordinate `c` in the 2D-plane projection corresponding to the pixel `(i,j)`
   - compute the "escape" iterations `n`,
-  - compute the RGB colours for this n: it is a length 3 array `col= [ R(n), G(n), B(n) ]`
-  - append to pixels at position `( i + j ) * 3` to this array.
+  - compute the RGB colours for this `n`,
+  - append to your final array.
 
 ### A Livebook
 
