@@ -7,7 +7,25 @@ Source:
 - [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set)
 - [Plotting algorithm](https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_set)
 
-<img width="613" alt="Screenshot 2024-11-05 at 19 35 32" src="https://github.com/user-attachments/assets/9eb71bec-b77e-4d04-bc88-bb86d19d6219">
+<img with="600" alt="zoom detail" src="https://github.com/user-attachments/assets/f0e9dcaa-34b2-4789-97fd-895355a6a7a9">
+
+
+
+IT is about studying the orbits of points in the 2D-plane under a given map. We are looking whether the iterates stay bounded are not. When we associate a colour that reflects this stability, this gives rise to Mandelbrot images: we associate a colour to each point.
+
+These images are therefor a colourful representation of where the sequence is stable and how fast does these sequences diverge.
+
+This repo contains:
+- a pur `Zig` computation
+- two `Livebook` to explore the orbits of points and to zoom into the Mandelbrot set.
+
+The Livebook proposes:
+- a pur `Elixir` one using Numerical Elixir with `EXLA` backend.
+- an enhanced version where te computations are made with embedding  `Zig` code thanks to the library `Zigler`.
+
+
+
+## Orbit explorer
 
 Given a complex number `c` and the polynomial `p_c(x)=x^2+c`, we compute the sequence of iterates:
 
@@ -20,15 +38,6 @@ p(p(c)) = c^4+2c^3+c^2+c
 
 The set of this sequence is the _orbit_ of the number `c` under the map `p`.
 
-The study of the orbits of numbers in terms of whether they are bounded are not, gives rise to Mandelbrot images like the one above when we associate a colour to each point.
-These images are therefor a colourful representation of where the sequence is stable and how fast does these sequences diverge.
-
-This repo contains a pur `Zig` computation and a pur `Elixir` one using Numerical Elixir. The Elixir code can be run in a Livebook. The Elixir code can also run embedded Zig code with the library `Zigler`.
-
-## First evaluation of orbits of points
-
-We firstly evaluated in a Livebook how stable the orbits are for some points.
-
 For example, for `c=1`, we have the orbit `O_1 = { 0, 1, 2, 5, 26,...}` but for `c=-1`, we have a cyclic orbit, `O_{-1} = {−1, 0, −1, 0,...}`.
 
 The code below computes "orbits". You select a point and a little animation displays the orbit.
@@ -38,7 +47,10 @@ The code below computes "orbits". You select a point and a little animation disp
 
 <img width="639" alt="Screenshot 2024-11-14 at 19 22 38" src="https://github.com/user-attachments/assets/abe4a943-ac31-44db-85c4-906f14f958bd">
 
-## The algorithm
+
+## Mandlebrot set explorer
+
+### The algorithm
 
 - instantiate a slice pixels of length say W x H x 3
 - loop over 1..H rows, `i`
@@ -48,15 +60,13 @@ The code below computes "orbits". You select a point and a little animation disp
   - compute the RGB colours for this n: it is a length 3 array `col= [ R(n), G(n), B(n) ]`
   - append to pixels at position `( i + j ) * 3` to this array.
 
-## Livebook
-
-This can be run in a Livebook.
+### A Livebook
 
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Fmandelbrot.livemd)
 
 We can draw these kind of images. 
 
-THere is a module where you can explore the fractal by clicking in (CTRL-click). 
+THere is a module where you can explore the fractal by clicking into the 2D-plane. 
 
 This happens thanks to `KinoJS.Live` as we pass binary between the browser and the Livebook used as a server.
 
