@@ -1,4 +1,4 @@
-# Mandelbrot Set with Zig and Numerical Elixir
+# Orbits and Mandelbrot set explorer with Numerical Elixir and Zig
 
 ## Introduction
 
