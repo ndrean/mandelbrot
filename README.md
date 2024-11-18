@@ -72,7 +72,7 @@ You can explore the fractal by clicking into the 2D-plane.
 
 This happens thanks to `KinoJS.Live`.
 
-We have a pur `Elixir` version that uses `Nx` with the `EXLA` backend, and another one that uses embedded `Zig` code for the heavy computations. The later is 3-4 magnitude faster.
+We have a pur `Elixir` version that uses `Nx` with the `EXLA` backend, and another one that uses embedded `Zig` code for the heavy computations. The later is 3-4 magnitude faster mostly because we are running compiled Zig code versus interpreted Elixir code in a Livebook running uncompiled on a BEAM.
 
 
 <img width="600" alt="detail" src="https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a" >
