@@ -14,7 +14,7 @@ We are looking whether the iterates stay bounded are not. When we associate a co
 
 These images are therefor a colourful representation of where the sequence is stable and how fast does these sequences diverge.
 
-<img with="600" alt="zoom detail" src="https://github.com/user-attachments/assets/f0e9dcaa-34b2-4789-97fd-895355a6a7a9">
+<img with="500" alt="zoom detail" src="https://github.com/user-attachments/assets/f0e9dcaa-34b2-4789-97fd-895355a6a7a9">
 
 
 This repo contains:
@@ -48,7 +48,7 @@ The code below computes "orbits". You select a point and a little animation disp
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fgithub.com%2Fndrean%2Fmandelbrot%2Fblob%2Fmain%2Flivebook%2Forbits.livemd)
 
 
-<img width="639" alt="Screenshot 2024-11-14 at 19 22 38" src="https://github.com/user-attachments/assets/abe4a943-ac31-44db-85c4-906f14f958bd">
+<img width="600" alt="orbit" src="https://github.com/user-attachments/assets/abe4a943-ac31-44db-85c4-906f14f958bd">
 
 
 ## Mandelbrot set explorer
@@ -74,7 +74,7 @@ This happens thanks to `KinoJS.Live`.
 We have a pur `Elixir` version that uses `Nx` with the `EXLA` backend, and another one that uses embedded `Zig` code for the heavy computations. The later is 3-4 magnitude faster.
 
 
-![image](https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a)
+<img width="600" alt="detail" src="https://github.com/user-attachments/assets/e747dbc9-02b1-4fd3-9670-73218d632a5a" >
 
 ## Details of the mandelbrot set
 
