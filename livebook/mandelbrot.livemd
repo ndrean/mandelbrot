@@ -5,8 +5,8 @@
 ```elixir
 Mix.install(
   [
-    {:nx, "~> 0.9.1"},
-    {:exla, "~> 0.9.1"},
+    {:nx, "~> 0.9"},
+    {:exla, "~> 0.9"},
     {:kino, "~> 0.14.2"},
     {:zigler, "~> 0.13.3"},
   ],
@@ -156,8 +156,8 @@ Livebook to compute orbits:
 
 We will use two types of functions:
 
-* `Elixir` functions using `def`
-* `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any). Within a numerical function, all the arguments are treated as _tensors_. To pass a non-tensor argment, use an `opts` keyword.
+- `Elixir` functions using `def`
+- `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any). Within a numerical function, all the arguments are treated as _tensors_. To pass a non-tensor argment, use an `opts` keyword.
 
 The points of the 2D plane will be represented as complex numbers as the Mandelbrot map works with complex numbers.
 
@@ -171,10 +171,10 @@ Source: <https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_se
 
 Iterate over each pixel `(i,j)`:
 
-* map it into the 2D plane: compute its "complex coordinates"
-* compute the iteration number
-* compute a colour
-* Sum-up and draw from the final tensor with `Kino`.
+- map it into the 2D plane: compute its "complex coordinates"
+- compute the iteration number
+- compute a colour
+- Sum-up and draw from the final tensor with `Kino`.
 
 An example of a zoom into an area. You can go as deep as you want with these fractals objects.
 
@@ -208,9 +208,9 @@ This module computes the **iteration number** for a given input `c`. It is a num
 
 How does this work?
 
-* If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
+- If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
 
-* If it is bounded, we get `max_iter`, otherwise a lower value.
+- If it is bounded, we get `max_iter`, otherwise a lower value.
 
 We cannot use the recursion form we did earlier because numerical functions don't accept several headers as plain Elixir.
 Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond`. In this context, `true` is the tensor `1`.
@@ -218,12 +218,12 @@ Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond
 ```elixir
 defmodule Orbit do
   import Nx.Defn
-    
+
   defn poly(z,c), do: z*z + c
-  
+
   # for speed, we don't use the norm (square root involved), only the square of the norm
   defn sq_norm(z), do: Nx.real(Nx.conjugate(z) * z)
-  
+
   defn number(c,opts) do
     max_iter = opts[:imax]
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
@@ -247,9 +247,9 @@ defmodule Orbit do
   # more performant
   defn iteration(p,opts) do
     p = Nx.devectorize(p)
-    x = p[0] 
-    y = p[1] 
-    max_iter = opts[:imax] 
+    x = p[0]
+    y = p[1]
+    max_iter = opts[:imax]
     #x = p[0]
     #y = p[1]
     condition = (x + 1) ** 2 + y ** 2
@@ -260,8 +260,8 @@ defmodule Orbit do
         max_iter
       Nx.greater(x **2 + y **2, 4) |> Nx.any() ->
         0
-      1 -> 
-        {i,_,_,_,_,_,_} = 
+      1 ->
+        {i,_,_,_,_,_,_} =
           while {i=0, x2=t0, y2= t0,  w=t0, x, y, max_iter}, Nx.any(Nx.less(i,max_iter) and Nx.less(x2+y2,4)) do
             x_tmp = x2 - y2 + x
             y_tmp = w - x2 - y2 + y
@@ -328,22 +328,22 @@ defmodule Colour do
     v = Nx.remainder(n,16)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0])
-      Nx.equal(v,0) -> Nx.stack([66, 30, 15]) 
-      Nx.equal(v,1) -> Nx.stack([25, 7, 26]) 
+      Nx.equal(v,0) -> Nx.stack([66, 30, 15])
+      Nx.equal(v,1) -> Nx.stack([25, 7, 26])
       Nx.equal(v,2) -> Nx.stack([9, 1, 47])
-      Nx.equal(v,3) -> Nx.stack([4, 4, 73]) 
-      Nx.equal(v,4) -> Nx.stack([0, 7, 100]) 
-      Nx.equal(v,5) -> Nx.stack([12, 44, 138]) 
-      Nx.equal(v,6) -> Nx.stack([24, 82, 177]) 
-      Nx.equal(v,7) -> Nx.stack([57, 125, 209]) 
-      Nx.equal(v,8) -> Nx.stack([134, 181, 229]) 
-      Nx.equal(v,9) -> Nx.stack([211, 236, 248]) 
-      Nx.equal(v,10) -> Nx.stack([241, 233, 191]) 
-      Nx.equal(v,11) -> Nx.stack([248, 201, 95]) 
-      Nx.equal(v,12) -> Nx.stack([255, 170, 0]) 
-      Nx.equal(v,13) -> Nx.stack([204, 128, 0]) 
-      Nx.equal(v,14) -> Nx.stack([153, 87, 0]) 
-      Nx.equal(v,15) -> Nx.stack([106, 52, 3]) 
+      Nx.equal(v,3) -> Nx.stack([4, 4, 73])
+      Nx.equal(v,4) -> Nx.stack([0, 7, 100])
+      Nx.equal(v,5) -> Nx.stack([12, 44, 138])
+      Nx.equal(v,6) -> Nx.stack([24, 82, 177])
+      Nx.equal(v,7) -> Nx.stack([57, 125, 209])
+      Nx.equal(v,8) -> Nx.stack([134, 181, 229])
+      Nx.equal(v,9) -> Nx.stack([211, 236, 248])
+      Nx.equal(v,10) -> Nx.stack([241, 233, 191])
+      Nx.equal(v,11) -> Nx.stack([248, 201, 95])
+      Nx.equal(v,12) -> Nx.stack([255, 170, 0])
+      Nx.equal(v,13) -> Nx.stack([204, 128, 0])
+      Nx.equal(v,14) -> Nx.stack([153, 87, 0])
+      Nx.equal(v,15) -> Nx.stack([106, 52, 3])
       1 -> Nx.stack([0,0,0])
     end
   end
@@ -352,22 +352,22 @@ defmodule Colour do
     v = Nx.remainder(n,16)
     cond do
       Nx.equal(n, max_iter) -> Nx.stack([0,0,0, 255])
-      Nx.equal(v,0) -> Nx.stack([66, 30, 15, 255]) 
-      Nx.equal(v,1) -> Nx.stack([25, 7, 26, 255]) 
+      Nx.equal(v,0) -> Nx.stack([66, 30, 15, 255])
+      Nx.equal(v,1) -> Nx.stack([25, 7, 26, 255])
       Nx.equal(v,2) -> Nx.stack([9, 1, 47, 255])
-      Nx.equal(v,3) -> Nx.stack([4, 4, 73, 255]) 
-      Nx.equal(v,4) -> Nx.stack([0, 7, 100, 255]) 
-      Nx.equal(v,5) -> Nx.stack([12, 44, 138, 255]) 
-      Nx.equal(v,6) -> Nx.stack([24, 82, 177, 255]) 
-      Nx.equal(v,7) -> Nx.stack([57, 125, 209, 255]) 
-      Nx.equal(v,8) -> Nx.stack([134, 181, 229, 255]) 
-      Nx.equal(v,9) -> Nx.stack([211, 236, 248, 255]) 
-      Nx.equal(v,10) -> Nx.stack([241, 233, 191, 255]) 
-      Nx.equal(v,11) -> Nx.stack([248, 201, 95, 255]) 
-      Nx.equal(v,12) -> Nx.stack([255, 170, 0, 255]) 
-      Nx.equal(v,13) -> Nx.stack([204, 128, 0, 255]) 
-      Nx.equal(v,14) -> Nx.stack([153, 87, 0, 255]) 
-      Nx.equal(v,15) -> Nx.stack([106, 52, 3, 255]) 
+      Nx.equal(v,3) -> Nx.stack([4, 4, 73, 255])
+      Nx.equal(v,4) -> Nx.stack([0, 7, 100, 255])
+      Nx.equal(v,5) -> Nx.stack([12, 44, 138, 255])
+      Nx.equal(v,6) -> Nx.stack([24, 82, 177, 255])
+      Nx.equal(v,7) -> Nx.stack([57, 125, 209, 255])
+      Nx.equal(v,8) -> Nx.stack([134, 181, 229, 255])
+      Nx.equal(v,9) -> Nx.stack([211, 236, 248, 255])
+      Nx.equal(v,10) -> Nx.stack([241, 233, 191, 255])
+      Nx.equal(v,11) -> Nx.stack([248, 201, 95, 255])
+      Nx.equal(v,12) -> Nx.stack([255, 170, 0, 255])
+      Nx.equal(v,13) -> Nx.stack([204, 128, 0, 255])
+      Nx.equal(v,14) -> Nx.stack([153, 87, 0, 255])
+      Nx.equal(v,15) -> Nx.stack([106, 52, 3, 255])
       1 -> Nx.stack([0,0,0, 255])
     end
   end
@@ -454,16 +454,16 @@ defmodule StreamMandelbrot do
 
   def paral_sym(%{h: h, w: w} = opts) do
     half_h = div(h,2)
-    
+
     rows_per_task = 30
     half_new = half_h - rem(half_h, rows_per_task)
-    nb_tasks = div(half_new, rows_per_task) 
+    nb_tasks = div(half_new, rows_per_task)
     opts = Map.merge(opts, %{h: half_new })
     {half_new, nb_tasks, rows_per_task, h} |> dbg()
 
       tasks_half_tensor =
         for task_id <- 0.. nb_tasks-1 do
-          Task.async(fn -> 
+          Task.async(fn ->
             iota_rows =
               Nx.iota({rows_per_task}, type: :u16)
               |> Nx.add(task_id * rows_per_task)
@@ -473,23 +473,23 @@ defmodule StreamMandelbrot do
               Nx.iota({w}, type: :u16)
               |> Nx.vectorize(:cols)
             cross_product = Nx.stack([iota_rows, iota_cols])
-            
+
             Nx.Defn.jit_apply(fn t ->
-              computed_rows = compute_half(t, opts) 
+              computed_rows = compute_half(t, opts)
               {task_id, computed_rows}
-              end, 
+              end,
               [cross_product]
             )
           end)
         end
 
-      half_tensor =   
+      half_tensor =
         Task.await_many(tasks_half_tensor, :infinity)
         |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
         |> Enum.map(&(elem(&1, 1)))
         |> Nx.stack()
         |> Nx.devectorize()
-          
+
 
       flah_tensor =
         Nx.tensor(half_tensor, names: [:cpus, :rows, :cols, :rgbs])
@@ -497,7 +497,7 @@ defmodule StreamMandelbrot do
 
       Nx.stack([half_tensor, flah_tensor]) |> Nx.reshape({half_new * 2, w, 3})
   end
-  
+
 end
 ```
 
@@ -516,7 +516,7 @@ StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 150})
 
 In this module, we are able to click on a point of the image and zoom in and dive into the fractal.
 
-We pass __binary__ between the browser and the Livebook used as a server. This happens thanks to `Kino.JS.Live` who supports using binary data.
+We pass **binary** between the browser and the Livebook used as a server. This happens thanks to `Kino.JS.Live` who supports using binary data.
 
 Given some bounds of the 2D-plan within our canvas, we will pass "quantitized" coordinates of the 2D-plan. To each `(i,j)` of the canvas, we compute in the browser the "real" coordinates `(x,y)` and pass this as a binary to the Livebook. For example, when you have 600 x 800 points as floats (4 bytes per float for f32), we pass 600x800x2x4 = 3_840_000 = 3.8MB of data.
 
@@ -526,7 +526,7 @@ With `Nx.from_binary(binary, :f32)`, we can enter the `Nx` world. We parallelise
 
 We then send back to the browser the resulting tensor with `Nx.to_binary`, the size becomes 600x800x3 = 1.44MB. This is because we are sending now `u8` integers representing the R,G,B of each point.
 
-We don't want to use data as strings  (data:image base 64) as this increases the weight and thus slows down the rendering.
+We don't want to use data as strings (data:image base 64) as this increases the weight and thus slows down the rendering.
 
 We can transform the binary into RGBA and display it into the canvas by building an `ImageData`.
 
@@ -552,11 +552,11 @@ defmodule ExZoom do
 
   defn to_complex(t), do: Nx.complex(t[0], t[1])
   # <--------------------------------------------------
-  
+
   def consume(binary, %{h: h, w: w, max_iter: max_iter}) do
-    
-    t = 
-      Nx.from_binary(binary, :f64) 
+
+    t =
+      Nx.from_binary(binary, :f64)
       |> Nx.reshape({h, w, 2})
       # we want to "complexify" the points thus we need to vectorize both dimensions
       |> Nx.vectorize([:r, :c])
@@ -566,27 +566,27 @@ defmodule ExZoom do
     # the height is truncated as you cannot stack tensor of different shapes easily
     nb_tasks = div(h, @rows_per_task)
     opts =  %{max_iter: max_iter}
-      
-    computations = 
+
+    computations =
       for task_id <- 0..nb_tasks-1 do
         Task.async(fn ->
           # we shift the start index by the number of rows already consummed
           start_row = task_id * @rows_per_task
-          slice = 
-            Nx.slice(t, [start_row, 0], [@rows_per_task, w]) 
+          slice =
+            Nx.slice(t, [start_row, 0], [@rows_per_task, w])
             |> Nx.vectorize([:row, :col])
-            
+
           # apply our Nx pipeline to the slice
           Nx.Defn.jit_apply(fn t ->
-            computed_rows = compute(t, opts) 
+            computed_rows = compute(t, opts)
             {task_id, computed_rows}
-            end, 
+            end,
             [slice]
           )
           end)
       end
-    
-    binary = 
+
+    binary =
       Task.await_many(computations, :infinity)
       # re-order as per the task_id we retunrned
       |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
@@ -627,20 +627,20 @@ defmodule ExZoom do
   def handle_event("clicked", {:binary,info, buffer}, %{assigns: assigns} = ctx) do
     %{h: h, w: w, max_iter: max_iter} = assigns
     # dbg(byte_size(buffer))
-  
+
     case info do
       %{"boundary" => %{"max_x" => right, "max_y" => top, "min_x" => left, "min_y" => bottom}} ->
         IO.inspect({right-left, top-bottom}, label: "zoom dim: ")
-      _ -> 
+      _ ->
         IO.inspect({3, 1}, label: "zoom dim: ")
     end
-    
+
     {nb_rows, binary} = consume(buffer, %{h: h, w: w, max_iter: max_iter})
     broadcast_event(ctx,"new", {:binary, %{nb_rows: nb_rows}, binary})
     {:noreply, ctx}
   end
 
-  
+
   asset "main.js" do
     """
     export function init(ctx, html) {
@@ -653,7 +653,7 @@ defmodule ExZoom do
       // initialize the zoom factor
       let zoomRatio = undefined;
       ctx.handleEvent("zoom_ratio", ({zoom_ratio}) => zoomRatio = zoom_ratio);
-    
+
       // initial bounds
       let boundary = {min_x: -2, max_y: 1, max_x: 1, min_y: -1};
 
@@ -678,28 +678,28 @@ defmodule ExZoom do
         const factor = zoomIn ? 1/zoomRatio : zoomRatio;
         const newWidth = oldWidth * factor;
         const newHeight = oldHeight * factor;
-      
-        return { 
+
+        return {
           min_x: newCenterX - newWidth / 2,
-          max_x: newCenterX + newWidth / 2, 
-          min_y: newCenterY - newHeight / 2, 
+          max_x: newCenterX + newWidth / 2,
+          min_y: newCenterY - newHeight / 2,
           max_y: newCenterY + newHeight / 2
         };
       }
-    
+
       // received from server -----------------------------------
       ctx.handleEvent("new", ([{nb_rows}, binary]) => {
-        //const len = binary.byteLength; 
+        //const len = binary.byteLength;
         const imageData = new ImageData(
-          new Uint8ClampedArray(binary), 
-          canvasWidth, 
+          new Uint8ClampedArray(binary),
+          canvasWidth,
           nb_rows
         );
-    
-    
-        // we send RGBA, 4 bytes so we can immediately render 
+
+
+        // we send RGBA, 4 bytes so we can immediately render
         // to canvas with "createImageBitmap"
-        createImageBitmap(imageData).then(bitmap => 
+        createImageBitmap(imageData).then(bitmap =>
           canvasCtx.drawImage(bitmap, 0, 0)
         );
       });
@@ -711,7 +711,7 @@ defmodule ExZoom do
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
         const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
-    
+
         //-- send data to the server -->
         Object.assign(boundary, newBounds);
         const buffer = getPoints(boundary)
@@ -772,7 +772,7 @@ Mix.install([{:zigler, "~> 0.13.3"},{:zig_get, "~> 0.13.1"},])
 
 With the `Zigler`, you can inline Zig code as below.
 
-The code below runs the same algorithm and runs __OS threads__ (bands of rows) for concurrency.
+The code below runs the same algorithm and runs **OS threads** (bands of rows) for concurrency.
 
 > we use the `beam` memory allocator from the library.
 
@@ -798,7 +798,7 @@ defmodule Zoom do
   ~Z"""
   const beam = @import("beam");
   const std = @import("std");
-  
+
   const Point = struct { x: f64, y: f64 };
   const point_size = @sizeOf(Point);
   const Bounds = struct { topLeft: Point, bottomRight: Point, cols: usize, rows: usize };
@@ -806,10 +806,10 @@ defmodule Zoom do
 
   /// nif: generate/5 Threaded
   pub fn generate(
-      rows: usize, 
-      cols: usize, 
-      imax: usize, 
-      topLeft: [2]f64, 
+      rows: usize,
+      cols: usize,
+      imax: usize,
+      topLeft: [2]f64,
       bottomRight: [2]f64
   ) !beam.term {
     const colours = try beam.allocator.alloc(u8, rows * cols * 4);
@@ -847,10 +847,10 @@ defmodule Zoom do
 
   // mutate the "colours" slice
   fn processThread(
-      colours: []u8, 
-      start_row: usize, 
+      colours: []u8,
+      start_row: usize,
       rows_per_thread: usize,
-      imax: usize, 
+      imax: usize,
       bounds: Bounds
   ) void {
     var idx: usize = start_row;
@@ -968,7 +968,7 @@ defmodule KinoZig do
     {Enum.at(br,0)-Enum.at(tl,0), Enum.at(tl,1)-Enum.at(br,1)}
   end
 
-  
+
   asset "main.js" do
     """
     export function init(ctx, html) {
@@ -978,7 +978,7 @@ defmodule KinoZig do
       const canvasCtx = canvas.getContext("2d");
       const canvasWidth = canvas.width, canvasHeight = canvas.height;
       const zoomRatio = canvas.dataset.zoom;
-    
+
       // initial bounds
       let boundary = {tl: [-2.01, 1.01], br: [1.01,-1.01]}
 
@@ -1003,22 +1003,22 @@ defmodule KinoZig do
         Object.assign(boundary, new_boundary);
         return new_boundary;
       }
-    
+
       // received from server -----------------------------------
       ctx.handleEvent("new", ([_, binary]) => {
         const imageData = new ImageData(
-          new Uint8ClampedArray(binary), 
-          canvasWidth, 
+          new Uint8ClampedArray(binary),
+          canvasWidth,
           canvasHeight
         );
-  
+
         // Render to canvas
         canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
-        createImageBitmap(imageData).then(bitmap => 
+        createImageBitmap(imageData).then(bitmap =>
           canvasCtx.drawImage(bitmap, 0, 0)
         );
       });
-          
+
 
       // push from browser -------------------------------------
       canvas.addEventListener("click", (e) => {
@@ -1029,7 +1029,7 @@ defmodule KinoZig do
         const canvasY = e.clientY - rect.top;
         console.log(e.clientX, e.clientY, rect.left, rect.top, canvasX, canvasY)
         const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
-    
+
         //-- send data to the server -->
         ctx.pushEvent("clicked", {boundary: newBounds})
       });
