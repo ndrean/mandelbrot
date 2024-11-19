@@ -11,6 +11,7 @@ react-color-testing/node_modules/
 zigimg
 .DS_Store
 /images/*
+/livebook/.Elixir.*
 
 
 

@@ -218,12 +218,12 @@ Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond
 ```elixir
 defmodule Orbit do
   import Nx.Defn
-
+    
   defn poly(z,c), do: z*z + c
-
+  
   # for speed, we don't use the norm (square root involved), only the square of the norm
   defn sq_norm(z), do: Nx.real(Nx.conjugate(z) * z)
-
+  
   defn number(c,opts) do
     max_iter = opts[:imax]
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
@@ -243,7 +243,52 @@ defmodule Orbit do
           max_iter - i + 1
       end
     end
+
+  # more performant
+  defn iteration(p,opts) do
+    p = Nx.devectorize(p)
+    x = p[0] 
+    y = p[1] 
+    max_iter = opts[:imax] 
+    #x = p[0]
+    #y = p[1]
+    condition = (x + 1) ** 2 + y ** 2
+    t0 = Nx.iota({1}, names: [:r], type: :f32)
+    #t0 = 0.0
+    cond do
+      Nx.less(condition, 0.0625) |> Nx.any() ->
+        max_iter
+      Nx.greater(x **2 + y **2, 4) |> Nx.any() ->
+        0
+      1 -> 
+        {i,_,_,_,_,_,_} = 
+          while {i=0, x2=t0, y2= t0,  w=t0, x, y, max_iter}, Nx.any(Nx.less(i,max_iter) and Nx.less(x2+y2,4)) do
+            x_tmp = x2 - y2 + x
+            y_tmp = w - x2 - y2 + y
+            {i + 1, x_tmp **2, y_tmp **2, (x_tmp + y_tmp)**2, x, y, max_iter}
+          end
+        i
+      end
+    end
 end
+
+
+
+
+
+```
+
+```elixir
+Nx.stack([Nx.tensor(0.45), Nx.tensor(0.2)])
+t = Nx.tensor([0.2, 0.2, 0.3, 0.2]) |> Nx.stack() |> Nx.reshape({2,2, 1}) |> Nx.vectorize([:r])
+|> Nx.squeeze()
+#t[0] |> Nx.squeeze()
+|> Orbit.iteration(imax: 50)
+
+#t = Nx.tensor([10,11, 20,21,30,31, 100,110, 200,210,300,310, 1000,1100, 2000,2100,300,3100])
+#|> Nx.reshape({3,3,2})
+#|> Nx.vectorize([:r, :c])
+#|> Orbit.iteration(imax: 50)
 
 ```
 
@@ -491,9 +536,10 @@ We can transform the binary into RGBA and display it into the canvas by building
 defmodule ExZoom do
   import Nx.Defn
 
-  @h 800
-  @w  1100
-  @imax 150
+  @h 600
+  @w  800
+  @imax 250
+  @zoom_ratio 5
   @rows_per_task 20
 
   # Nx computations ------------------------------------
@@ -508,27 +554,27 @@ defmodule ExZoom do
   # <--------------------------------------------------
   
   def consume(binary, %{h: h, w: w, max_iter: max_iter}) do
-    # the height is truncated as you cannot stack tensor of different shapes easily
-    nb_tasks = div(h, @rows_per_task)
     
-    opts =  %{max_iter: max_iter}
-
     t = 
-      Nx.from_binary(binary, :f32) 
+      Nx.from_binary(binary, :f64) 
       |> Nx.reshape({h, w, 2})
       # we want to "complexify" the points thus we need to vectorize both dimensions
       |> Nx.vectorize([:r, :c])
       |> to_complex()
       |> Nx.devectorize()
 
-    
+    # the height is truncated as you cannot stack tensor of different shapes easily
+    nb_tasks = div(h, @rows_per_task)
+    opts =  %{max_iter: max_iter}
+      
     computations = 
       for task_id <- 0..nb_tasks-1 do
         Task.async(fn ->
           # we shift the start index by the number of rows already consummed
           start_row = task_id * @rows_per_task
           slice = 
-            Nx.slice(t, [start_row, 0], [@rows_per_task, w]) |> Nx.vectorize([:row, :col])
+            Nx.slice(t, [start_row, 0], [@rows_per_task, w]) 
+            |> Nx.vectorize([:row, :col])
             
           # apply our Nx pipeline to the slice
           Nx.Defn.jit_apply(fn t ->
@@ -546,7 +592,6 @@ defmodule ExZoom do
       |> Enum.sort(fn {x,_}, {y,_} -> Nx.to_number(x)<= Nx.to_number(y) end)
       |> Enum.map(&(elem(&1, 1)))
       |> Nx.stack()
-      |> Nx.devectorize()
       # send to the browser as binary
       |> Nx.to_binary()
     # the browser needs to know the nb of rows as it may be truncated
@@ -574,12 +619,22 @@ defmodule ExZoom do
 
   @impl true
   def handle_connect(ctx) do
+    broadcast_event(ctx, "zoom_ratio", %{"zoom_ratio" => @zoom_ratio})
     {:ok, ctx.assigns.html, ctx}
   end
 
   @impl true
-  def handle_event("clicked", {:binary,_, buffer}, %{assigns: assigns} = ctx) do
+  def handle_event("clicked", {:binary,info, buffer}, %{assigns: assigns} = ctx) do
     %{h: h, w: w, max_iter: max_iter} = assigns
+    # dbg(byte_size(buffer))
+  
+    case info do
+      %{"boundary" => %{"max_x" => right, "max_y" => top, "min_x" => left, "min_y" => bottom}} ->
+        IO.inspect({right-left, top-bottom}, label: "zoom dim: ")
+      _ -> 
+        IO.inspect({3, 1}, label: "zoom dim: ")
+    end
+    
     {nb_rows, binary} = consume(buffer, %{h: h, w: w, max_iter: max_iter})
     broadcast_event(ctx,"new", {:binary, %{nb_rows: nb_rows}, binary})
     {:noreply, ctx}
@@ -594,6 +649,10 @@ defmodule ExZoom do
       const canvas = document.getElementById("myCanvas");
       const canvasCtx = canvas.getContext("2d");
       const canvasWidth = canvas.width, canvasHeight = canvas.height;
+
+      // initialize the zoom factor
+      let zoomRatio = undefined;
+      ctx.handleEvent("zoom_ratio", ({zoom_ratio}) => zoomRatio = zoom_ratio);
     
       // initial bounds
       let boundary = {min_x: -2, max_y: 1, max_x: 1, min_y: -1};
@@ -609,7 +668,7 @@ defmodule ExZoom do
       function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
         // Get the clicked point's corresponding 2D plane coordinates
         const { x: newCenterX, y: newCenterY } = toCartesian(canvasX, canvasY, bounds)
-        const { zoomRatio = 5, zoomIn = true} = options;
+        const { zoomIn = true} = options;
 
         const {min_x, max_x, min_y, max_y} = bounds;
         // Compute the width and height of the new zoomed rectangle
@@ -631,7 +690,6 @@ defmodule ExZoom do
       // received from server -----------------------------------
       ctx.handleEvent("new", ([{nb_rows}, binary]) => {
         //const len = binary.byteLength; 
-        console.log("new")
         const imageData = new ImageData(
           new Uint8ClampedArray(binary), 
           canvasWidth, 
@@ -657,13 +715,12 @@ defmodule ExZoom do
         //-- send data to the server -->
         Object.assign(boundary, newBounds);
         const buffer = getPoints(boundary)
-        ctx.pushEvent("clicked", [{}, buffer])
+        ctx.pushEvent("clicked", [{boundary: newBounds}, buffer])
       });
 
       // compute all cartesians coordinates in the current canvas
       function getPoints(bounds) {
-        const buffer = new ArrayBuffer(canvasWidth * canvasHeight * 2 * 4); // 2 floats per pixel, 4 bytes each
-        const floatArray = new Float32Array(buffer);
+        const floatArray = new Float64Array(canvasWidth * canvasHeight * 2); // 2 floats per pixel, 4 bytes each
 
         let index = 0;
         for (let n = 0; n < canvasWidth * canvasHeight; n++) {
@@ -675,7 +732,7 @@ defmodule ExZoom do
           floatArray[n * 2] = x;
           floatArray[n * 2 + 1] = y;
         }
-        return buffer;
+        return floatArray.buffer;
       }
 
       // first render---------------
@@ -687,9 +744,9 @@ defmodule ExZoom do
 end
 ```
 
-You can `CTRL+CLICK` to zoom into the point of your choice. The zoom factor is 10.
+You can `CLICK` to zoom into the point of your choice. The zoom factor is 5 (you can change it via the module argument).
 
-You can dezoom with `CTRL+SHIFT+CLICK`.
+You can dezoom with `+SHIFT+CLICK`.
 
 ```elixir
 ExZoom.start()
@@ -719,11 +776,9 @@ The code below runs the same algorithm and runs __OS threads__ (bands of rows) f
 
 > we use the `beam` memory allocator from the library.
 
-We return the data from `Zig` as a _binary_ .
+We return the data from `Zig` as a _binary_ to `Elixir` that will pass it to Javascript.
 
-It can easliy be consumed by `Nx` and then `Kino` (see further below).
-
-However, in the first snippet below, we went to extra speed and less bandwidth consumption. The Livebook will pass it to the browser into an `ImageData` container and render to the canvas via `window.createImageBitmap`.
+To get extra speed and less bandwidth consumption, the Livebook will pass it to the browser into an `ImageData` container and render into the canvas via `window.createImageBitmap`.
 
 You can `CLICK` into the image and explore with the power of Zig (`SHIFT+CLICK` do "de-zoom"). We use a factor 5.
 
@@ -744,7 +799,7 @@ defmodule Zoom do
   const beam = @import("beam");
   const std = @import("std");
   
-  const Point = struct { x: f32, y: f32 };
+  const Point = struct { x: f64, y: f64 };
   const point_size = @sizeOf(Point);
   const Bounds = struct { topLeft: Point, bottomRight: Point, cols: usize, rows: usize };
 
@@ -754,8 +809,8 @@ defmodule Zoom do
       rows: usize, 
       cols: usize, 
       imax: usize, 
-      topLeft: [2]f32, 
-      bottomRight: [2]f32
+      topLeft: [2]f64, 
+      bottomRight: [2]f64
   ) !beam.term {
     const colours = try beam.allocator.alloc(u8, rows * cols * 4);
     defer beam.allocator.free(colours);
@@ -864,8 +919,8 @@ defmodule Zoom do
 
   // canvas-(i,j) are rows,cols and become (x,y) 2D-coordinates within the bounds
   fn mapPixel(pixel: [2]usize, ctx: Bounds) Point {
-    const x: f32 = ctx.topLeft.x + @as(f32, @floatFromInt(pixel[1])) / @as(f32,  @floatFromInt(ctx.cols)) * (ctx.bottomRight.x - ctx.topLeft.x);
-    const y: f32 = ctx.topLeft.y - @as(f32, @floatFromInt(pixel[0])) / @as(f32,  @floatFromInt(ctx.rows)) * (ctx.topLeft.y - ctx.bottomRight.y);
+    const x: f64 = ctx.topLeft.x + @as(f64, @floatFromInt(pixel[1])) / @as(f64,  @floatFromInt(ctx.cols)) * (ctx.bottomRight.x - ctx.topLeft.x);
+    const y: f64 = ctx.topLeft.y - @as(f64, @floatFromInt(pixel[0])) / @as(f64,  @floatFromInt(ctx.rows)) * (ctx.topLeft.y - ctx.bottomRight.y);
     return Point{ .x = x, .y = y };
   }
   """
@@ -877,9 +932,10 @@ defmodule KinoZig do
 
   @h 1000
   @w 1200
-  @imax 450
+  @imax 500
   @factor 5
 
+  # pass the zoom factor via a dataset this time
   def canvas(h, w, factor) do
     """
     <canvas id="myCanvas" width=#{w} height=#{h} data-zoom=#{factor}></canvas>
@@ -902,9 +958,14 @@ defmodule KinoZig do
   @impl true
   def handle_event("clicked", %{"boundary" => %{"tl" => tl, "br"=> br}}, ctx) do
     %{assigns: %{h: h, w: w, max_iter: max_iter}} = ctx
+    IO.inspect(calc_dims(tl,br), label: "dims: ")
     colours = Zoom.generate(h, w, max_iter, tl, br)
     broadcast_event(ctx,"new", {:binary, %{}, colours})
     {:noreply, ctx}
+  end
+
+  defp calc_dims(tl, br) do
+    {Enum.at(br,0)-Enum.at(tl,0), Enum.at(tl,1)-Enum.at(br,1)}
   end
 
   
@@ -916,7 +977,7 @@ defmodule KinoZig do
       const canvas = document.getElementById("myCanvas");
       const canvasCtx = canvas.getContext("2d");
       const canvasWidth = canvas.width, canvasHeight = canvas.height;
-      const factor = canvas.dataset.zoom;
+      const zoomRatio = canvas.dataset.zoom;
     
       // initial bounds
       let boundary = {tl: [-2.01, 1.01], br: [1.01,-1.01]}
@@ -924,12 +985,11 @@ defmodule KinoZig do
       // Calcuate new bounds from clicked points with zoom factor
       function recalculateBounds(canvasX, canvasY, bounds, options = {}) {
         const {tl, br} = bounds;
-        const { zoomRatio = factor, zoomIn = true} = options;
+        const { zoomIn = true} = options;
         const oldWidth = br[0] - tl[0];
         const oldHeight = tl[1] - br[1];
         const new_center_x = tl[0] + (canvasX / (canvasWidth-1)) * (oldWidth);
         const new_center_y = tl[1] - (canvasY / (canvasHeight-1)) * (oldHeight);
-        console.log(new_center_x, new_center_y);
 
         const factor = zoomIn ? 1/zoomRatio : zoomRatio;
         const newWidth = oldWidth * factor;
@@ -953,6 +1013,7 @@ defmodule KinoZig do
         );
   
         // Render to canvas
+        canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
         createImageBitmap(imageData).then(bitmap => 
           canvasCtx.drawImage(bitmap, 0, 0)
         );
@@ -967,7 +1028,7 @@ defmodule KinoZig do
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
         console.log(e.clientX, e.clientY, rect.left, rect.top, canvasX, canvasY)
-        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomRatio: factor, zoomIn: !e.shiftKey});
+        const newBounds = recalculateBounds(canvasX, canvasY, boundary, {zoomIn: !e.shiftKey});
     
         //-- send data to the server -->
         ctx.pushEvent("clicked", {boundary: newBounds})
@@ -1065,16 +1126,12 @@ defmodule Zigit do
                 const colour = createRgb(iter, ctx.imax);
 
                 const p_idx = (row_id * ctx.res_x + col_id) * 3;
-                pixels[p_idx + 0] = colour[0];
-                pixels[p_idx + 1] = colour[1];
-                pixels[p_idx + 2] = colour[2];
+                @memcpy(pixels[p_idx..p_idx+2], &colour);
 
                 // Process the symmetric row (if it's different from current row)
                 if (row_id != sym_row_id) {
                     const sym_p_idx = (sym_row_id * ctx.res_x + col_id) * 3;
-                    pixels[sym_p_idx + 0] = colour[0];
-                    pixels[sym_p_idx + 1] = colour[1];
-                    pixels[sym_p_idx + 2] = colour[2];
+                    @memcpy(pixels[sym_p_idx..sym_p_idx+2], &colour);
                 }
             }
         }
@@ -1133,7 +1190,7 @@ end
 
 We run the Zig code. It returns a binary that we are able to consume with `Nx` and display the image.
 
-To draw an image of 1M pixels, it takes a few milliseconds. Feels like magic!
+To draw an image of 1.5M pixels, it takes a few milliseconds. Although the image is written as Base64, it is still fast.
 
 ```elixir
 h = 1200; w = 1500
@@ -1145,4 +1202,4 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":38414,"stamp":{"token":"XCP.JhAnZXG_6-DVtSW0sxAVBDQDkC7XYKpl-E-FowPXbMPr79NVmfvemIWoCaKQUJQajhKe2_VNxg4wNvZ_w1t7n0x7uUKZFZD_u3_4pQKZOIXXSC5CcX0XzixrBP__hy-gi5SfobB0ZfEjyKh3ON6_KFM9kVEMFYdTF16R","version":2}} -->
+<!-- livebook:{"offset":40011,"stamp":{"token":"XCP.nhWct7OQki-d3WetaLHYctqyyTwvMOblntmjQ4HDjqoxMNiCk1G0aiifNuvAo9UKTr-hagu7B-0OuzNo6aQmRwK-00MQrQ3eF3NXsh1d1FnCLk2k_HJ6yORuMyyrGWL5jmqh-Mjn24j_-LJV5c-Slk2iIiKJOUdUISd6","version":2}} -->
