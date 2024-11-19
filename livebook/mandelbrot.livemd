@@ -226,6 +226,8 @@ defmodule Orbit do
 
   defn number(c,opts) do
     max_iter = opts[:imax]
+    #h = opts[:h]
+    #w = opts[:w]
     condition = (Nx.real(c) +1) ** 2 + (Nx.imag(c)**2)
     cond do
       # points in first cardioid are all stable. Save on iterations
@@ -236,38 +238,21 @@ defmodule Orbit do
         0
       # evaluate each point as it can be bounded or not in the disk 2
       1 ->
+        
+          # less efficient going up as we need to build a h x w zero tensor
+          #z0 = Nx.complex(0.0, 0.0) |> Nx.broadcast({h,w}) |> Nx.vectorize([:rows, :cols])
+          # {i, _, _, _} =
+            #while {i=0, z=z0, c, max_iter}, Nx.less(i,max_iter) and Nx.less(sq_norm(z), 4) do
+            #    {i+1, poly(z,c), c, max_iter}
+            #end
+
+          # more efficient going down as we can start at the input value "c"
           {i, _, _} =
             while {i=max_iter, z=c, c}, Nx.greater(i,1) and Nx.less(sq_norm(z), 4) do
                 {i-1, poly(z,c), c}
             end
+          #i
           max_iter - i + 1
-      end
-    end
-
-  # more performant
-  defn iteration(p,opts) do
-    p = Nx.devectorize(p)
-    x = p[0]
-    y = p[1]
-    max_iter = opts[:imax]
-    #x = p[0]
-    #y = p[1]
-    condition = (x + 1) ** 2 + y ** 2
-    t0 = Nx.iota({1}, names: [:r], type: :f32)
-    #t0 = 0.0
-    cond do
-      Nx.less(condition, 0.0625) |> Nx.any() ->
-        max_iter
-      Nx.greater(x **2 + y **2, 4) |> Nx.any() ->
-        0
-      1 ->
-        {i,_,_,_,_,_,_} =
-          while {i=0, x2=t0, y2= t0,  w=t0, x, y, max_iter}, Nx.any(Nx.less(i,max_iter) and Nx.less(x2+y2,4)) do
-            x_tmp = x2 - y2 + x
-            y_tmp = w - x2 - y2 + y
-            {i + 1, x_tmp **2, y_tmp **2, (x_tmp + y_tmp)**2, x, y, max_iter}
-          end
-        i
       end
     end
 end
@@ -276,6 +261,11 @@ end
 
 
 
+```
+
+```elixir
+#Orbit.number(Nx.complex(0.6, 0.2), imax: 50)
+#Nx.complex(0.2, 0.2) |> Nx.broadcast({400,500})
 ```
 
 ## Some colour palettes
@@ -386,7 +376,7 @@ defmodule Mandelbrot do
     cross_product = Nx.stack([iota_rows, iota_cols])
 
     Pixel.map(cross_product,{h,w}, defining_points)
-      |> Orbit.number(imax: max_iter)
+      |> Orbit.number(imax: max_iter) #, h: h, w: w)
       |> Colour.rgb(max_iter)
       |> Nx.devectorize()
       |> Nx.reshape({h, w, 3})
@@ -400,7 +390,7 @@ Depending on your machine, the computation below can be lengthy.
 If you want to simply evaluate, set low values `h = w = 300` and `max_iter = 100`.
 
 ```elixir
-h = 400; w = 500
+h = 400; w = 502
 Mandelbrot.compute(h: h, w: w, max_iter: 100)
 |> Kino.Image.new()
 ```
@@ -491,7 +481,7 @@ We get the expected performance boost. We are able to incrase the resolution.
 > For the fun, we changed the colour palette.
 
 ```elixir
-h = 800; w = 1000
+h = 800; w = 1001
 
 StreamMandelbrot.paral_sym( %{h: h, w: w, max_iter: 150})
 |> Kino.Image.new()
@@ -536,17 +526,20 @@ defmodule ExZoom do
   end
 
   defn to_complex(t), do: Nx.complex(t[0], t[1])
+
+  # we want to "complexify" the points thus we need to vectorize both dimensions
+  defn complexify(t, opts) do
+    h = opts[:h]
+    w = opts[:w]
+    Nx.reshape(t,{h, w, 2})
+    |> Nx.vectorize([:r, :c])
+    |> to_complex()
+  end
   # <--------------------------------------------------
 
   def consume(binary, %{h: h, w: w, max_iter: max_iter}) do
 
-    t =
-      Nx.from_binary(binary, :f64)
-      |> Nx.reshape({h, w, 2})
-      # we want to "complexify" the points thus we need to vectorize both dimensions
-      |> Nx.vectorize([:r, :c])
-      |> to_complex()
-      |> Nx.devectorize()
+    t = Nx.from_binary(binary, :f64) |> complexify(h: h, w: w) 
 
     # the height is truncated as you cannot stack tensor of different shapes easily
     nb_tasks = div(h, @rows_per_task)
@@ -558,7 +551,8 @@ defmodule ExZoom do
           # we shift the start index by the number of rows already consummed
           start_row = task_id * @rows_per_task
           slice =
-            Nx.slice(t, [start_row, 0], [@rows_per_task, w])
+            Nx.devectorize(t)
+            |> Nx.slice([start_row, 0], [@rows_per_task, w])
             |> Nx.vectorize([:row, :col])
 
           # apply our Nx pipeline to the slice
@@ -1186,4 +1180,4 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":39340,"stamp":{"token":"XCP.0IvtmqQ7wA1EPwOffr5vcY0cJK_y_cDPYwzrEDpiBBLNJzFDDdXgich9cfcv_oyu0AIxvEXnM2U3w4wG3TxzLkRYmAwtSHN4PCTccuxzzaoFeaSDrvn0qSa4muMDCJh1Gi5Z9y2pY5FOe3EN4nSuncADWyQunMJQasqu","version":2}} -->
+<!-- livebook:{"offset":39310,"stamp":{"token":"XCP.qJgVwQj4jUHWD_zxA0-Xgf5CaXZumzWfJkHOaD0ciwLVZ4ZCAtfOKOAD_CK3Ywjwa19VesYFf2FRt92GO2opedN_WwpJugZXrG5eptq2QSf2h4NLC9PMcclLtfyh7IuQUIW5b5DJIk4Ug8wcFYnX3U13R1Vjo4oIiDBc","version":2}} -->
