@@ -22,7 +22,7 @@ If you run into an error above, this means that you don't have Zig. Comment the 
 This means you can't run the last modules where we use inline `Zig` code.
 
 ```elixir
-# :observer.start()
+:observer.start()
 ```
 
 ### Table of contents
@@ -156,8 +156,8 @@ Livebook to compute orbits:
 
 We will use two types of functions:
 
-- `Elixir` functions using `def`
-- `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any). Within a numerical function, all the arguments are treated as _tensors_. To pass a non-tensor argment, use an `opts` keyword.
+* `Elixir` functions using `def`
+* `Nx` functions using `defn`; these use a special backend (EXLA with CPU or GPU if any). Within a numerical function, all the arguments are treated as _tensors_. To pass a non-tensor argment, use an `opts` keyword.
 
 The points of the 2D plane will be represented as complex numbers as the Mandelbrot map works with complex numbers.
 
@@ -171,10 +171,10 @@ Source: <https://en.wikipedia.org/wiki/Plotting_algorithms_for_the_Mandelbrot_se
 
 Iterate over each pixel `(i,j)`:
 
-- map it into the 2D plane: compute its "complex coordinates"
-- compute the iteration number
-- compute a colour
-- Sum-up and draw from the final tensor with `Kino`.
+* map it into the 2D plane: compute its "complex coordinates"
+* compute the iteration number
+* compute a colour
+* Sum-up and draw from the final tensor with `Kino`.
 
 An example of a zoom into an area. You can go as deep as you want with these fractals objects.
 
@@ -208,9 +208,9 @@ This module computes the **iteration number** for a given input `c`. It is a num
 
 How does this work?
 
-- If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
+* If `|c|>2`, then this point is unstable. Otherwise, we have to compute for each point whether it stays bounded or not.
 
-- If it is bounded, we get `max_iter`, otherwise a lower value.
+* If it is bounded, we get `max_iter`, otherwise a lower value.
 
 We cannot use the recursion form we did earlier because numerical functions don't accept several headers as plain Elixir.
 Instead we use the `"Nx"-while` loop. Note how we use the `Nx` versions of `cond`. In this context, `true` is the tensor `1`.
@@ -275,20 +275,6 @@ end
 
 
 
-
-```
-
-```elixir
-Nx.stack([Nx.tensor(0.45), Nx.tensor(0.2)])
-t = Nx.tensor([0.2, 0.2, 0.3, 0.2]) |> Nx.stack() |> Nx.reshape({2,2, 1}) |> Nx.vectorize([:r])
-|> Nx.squeeze()
-#t[0] |> Nx.squeeze()
-|> Orbit.iteration(imax: 50)
-
-#t = Nx.tensor([10,11, 20,21,30,31, 100,110, 200,210,300,310, 1000,1100, 2000,2100,300,3100])
-#|> Nx.reshape({3,3,2})
-#|> Nx.vectorize([:r, :c])
-#|> Orbit.iteration(imax: 50)
 
 ```
 
@@ -459,7 +445,6 @@ defmodule StreamMandelbrot do
     half_new = half_h - rem(half_h, rows_per_task)
     nb_tasks = div(half_new, rows_per_task)
     opts = Map.merge(opts, %{h: half_new })
-    {half_new, nb_tasks, rows_per_task, h} |> dbg()
 
       tasks_half_tensor =
         for task_id <- 0.. nb_tasks-1 do
@@ -789,7 +774,7 @@ The Zig NIF will compute by spawning OS threads (as much as the numbers of CPU c
 It will return the RGBA values for each point of the canvas as a binary.
 
 ```elixir
-defmodule Zoom do
+defmodule ZigZoom do
   use Zig, otp_app: :zigler,
    # nifs: [..., generate: [:threaded]]
     release_mode: :fast
@@ -924,9 +909,8 @@ defmodule Zoom do
     return Point{ .x = x, .y = y };
   }
   """
-end
 
-defmodule KinoZig do
+
   use Kino.JS
   use Kino.JS.Live
 
@@ -959,7 +943,7 @@ defmodule KinoZig do
   def handle_event("clicked", %{"boundary" => %{"tl" => tl, "br"=> br}}, ctx) do
     %{assigns: %{h: h, w: w, max_iter: max_iter}} = ctx
     IO.inspect(calc_dims(tl,br), label: "dims: ")
-    colours = Zoom.generate(h, w, max_iter, tl, br)
+    colours = ZigZoom.generate(h, w, max_iter, tl, br)
     broadcast_event(ctx,"new", {:binary, %{}, colours})
     {:noreply, ctx}
   end
@@ -1043,7 +1027,7 @@ end
 ```
 
 ```elixir
-KinoZig.start()
+ZigZoom.start()
 ```
 
 ## Static image with Zig and Nx and Kino
@@ -1202,4 +1186,4 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":40011,"stamp":{"token":"XCP.nhWct7OQki-d3WetaLHYctqyyTwvMOblntmjQ4HDjqoxMNiCk1G0aiifNuvAo9UKTr-hagu7B-0OuzNo6aQmRwK-00MQrQ3eF3NXsh1d1FnCLk2k_HJ6yORuMyyrGWL5jmqh-Mjn24j_-LJV5c-Slk2iIiKJOUdUISd6","version":2}} -->
+<!-- livebook:{"offset":39340,"stamp":{"token":"XCP.0IvtmqQ7wA1EPwOffr5vcY0cJK_y_cDPYwzrEDpiBBLNJzFDDdXgich9cfcv_oyu0AIxvEXnM2U3w4wG3TxzLkRYmAwtSHN4PCTccuxzzaoFeaSDrvn0qSa4muMDCJh1Gi5Z9y2pY5FOe3EN4nSuncADWyQunMJQasqu","version":2}} -->
