@@ -27,7 +27,9 @@ The two Livebooks are:
   - we have a pur `Elixir` implementation  using Numerical Elixir with `EXLA` backend of the Mandelbrot set.
   - we have an enhanced version where the heavy computations are made with running embedded  `Zig` code thanks to the library `Zigler`.
 
+The `Zig` code is compiled to `WebAssembly` to demonstrate quickly how this renders:
 
+<https://ndrean.github.io/zig-assembly-test/>
 
 ## Orbit explorer
 
