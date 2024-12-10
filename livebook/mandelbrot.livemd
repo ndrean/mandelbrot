@@ -1180,4 +1180,4 @@ Zigit.generate_mandelbrot(w, h, max_iter)
 |> Kino.Image.new()
 ```
 
-<!-- livebook:{"offset":39310,"stamp":{"token":"XCP.qJgVwQj4jUHWD_zxA0-Xgf5CaXZumzWfJkHOaD0ciwLVZ4ZCAtfOKOAD_CK3Ywjwa19VesYFf2FRt92GO2opedN_WwpJugZXrG5eptq2QSf2h4NLC9PMcclLtfyh7IuQUIW5b5DJIk4Ug8wcFYnX3U13R1Vjo4oIiDBc","version":2}} -->
+<!-- livebook:{"offset":39310,"stamp":{"token":"XCP.w4SEE3ocJO916dGqUNpf8bEeDzENGSakiE-yRFLAxWJwZOZtlYSma7e1Y0l4_WNQfkUCE6XDbdKtu20wRh1anDo5K8l5eR5yacnjz2PwwJy0GP_EGISV2g4Ph9wtue_Ws3J5wIUrsyciSokb3ZsDCQM6SYLuCEt2Evzt","version":2}} -->

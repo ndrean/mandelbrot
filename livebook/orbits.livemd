@@ -9,7 +9,7 @@ Mix.install(
   ],
   config: [nx: [default_backend: EXLA.Backend]]
 )
-Nx.Defn.global_default_options(compiler: EXLA, client: :host)
+# Nx.Defn.global_default_options(compiler: EXLA, client: :host)
 ```
 
 ## Orbit number
@@ -57,11 +57,14 @@ defmodule Plot do
   import Nx.Defn
   import Nx.Constants, only: [i: 0]
 
-  defn point(cx,cy), do: cx + i() * cy
+  defn points(cx,cy,opts) do
+    c = cx + i() * cy
+    {t_nb, t, _, _} = Orbit.calc(c, opts)
+    {t_nb, t}
+  end
   
   def to_js(cx, cy, imax) do
-    c = point(cx,cy)
-    {t_nb, t, _, _} = Orbit.calc(c, n: imax) 
+    {t_nb, t} = points(cx,cy, [n: imax]) 
 
     nb = Nx.to_number(t_nb) - 1
     
